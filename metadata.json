@@ -1,0 +1,11 @@
+{
+  "name": "EduMind AI - 多租戶 SaaS 教材問答平台",
+  "description": "一個強大、可擴展的 AI 驅動教育教材問答平台。支援多租戶架構、RAG 文檔互動以及語音轉文字整合。",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "requirements": [
+    "PostgreSQL with pgvector extension",
+    "Redis for BullMQ (Background Job processing)"
+  ]
+}
