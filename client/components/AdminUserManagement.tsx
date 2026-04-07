@@ -1,26 +1,237 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { UserRole } from '../types';
-import { IconUser, IconZap, IconInfo } from './Icons';
-import { getAuthHeaders } from '../services/authService';
+import { IconUser, IconZap } from './Icons';
+import { getAuthHeaders, authService } from '../services/authService';
+
+function generatePassword(length = 8): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  let pwd = '';
+  for (let i = 0; i < length; i++) {
+    pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return pwd;
+}
+
+interface CreatedAccount {
+  studentId: string;
+  name: string;
+  password: string;
+  role: string;
+}
 
 const AdminUserManagement: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [createdAccounts, setCreatedAccounts] = useState<CreatedAccount[]>([]);
+  const [errors, setErrors] = useState<Array<{ studentId: string; error: string }>>([]);
+  const [message, setMessage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const currentUser = authService.getCurrentUser();
+  const isAdmin = currentUser?.role === UserRole.ADMIN;
 
   useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  function fetchUsers() {
     fetch('/api/users', { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(d => { if (d.success) setUsers(d.data); })
       .catch(console.error);
-  }, []);
+  }
+
+  async function handleExcelUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setMessage('');
+    setCreatedAccounts([]);
+    setErrors([]);
+
+    try {
+      // Dynamic import xlsx
+      const XLSX = await import('xlsx');
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+      if (rows.length === 0) {
+        setMessage('Excel 檔案中沒有資料');
+        setUploading(false);
+        return;
+      }
+
+      // Map columns: look for 學號/studentId and 姓名/name
+      const newUsers: CreatedAccount[] = rows.map((row) => {
+        const studentId = String(row['學號'] || row['studentId'] || row['student_id'] || row['帳號'] || '').trim();
+        const name = String(row['姓名'] || row['name'] || row['名字'] || '').trim();
+        const password = generatePassword();
+        return { studentId, name: name || studentId, password, role: 'STUDENT' };
+      }).filter(u => u.studentId);
+
+      if (newUsers.length === 0) {
+        setMessage('找不到「學號」欄位，請確認 Excel 含有「學號」和「姓名」欄位');
+        setUploading(false);
+        return;
+      }
+
+      if (newUsers.length > 200) {
+        setMessage('單次最多建立 200 個帳號');
+        setUploading(false);
+        return;
+      }
+
+      // Call API
+      const result = await authService.batchCreateUsers(
+        newUsers.map(u => ({ studentId: u.studentId, name: u.name, password: u.password }))
+      );
+
+      // Map passwords back to created accounts
+      const created: CreatedAccount[] = result.created.map((c: any) => {
+        const match = newUsers.find(u => u.studentId === c.student_id);
+        return {
+          studentId: c.student_id,
+          name: c.name,
+          password: match?.password || '(已建立)',
+          role: c.role,
+        };
+      });
+
+      setCreatedAccounts(created);
+      setErrors(result.errors || []);
+      setMessage(`成功建立 ${result.createdCount} 個帳號` + (result.errorCount > 0 ? `，${result.errorCount} 個失敗` : ''));
+      fetchUsers();
+    } catch (err: any) {
+      setMessage(`上傳失敗：${err.message}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
+  function downloadAccountList() {
+    if (createdAccounts.length === 0) return;
+    const header = '學號,姓名,密碼,角色\n';
+    const csv = header + createdAccounts.map(a => `${a.studentId},${a.name},${a.password},${a.role}`).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `學生帳號_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-black text-slate-800">用戶管理</h2>
-        <p className="text-sm text-slate-500">管理系統用戶帳號</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800">用戶管理</h2>
+          <p className="text-sm text-slate-500">管理系統用戶帳號</p>
+        </div>
+        <button
+          onClick={() => setShowUpload(!showUpload)}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+          批次建立學生帳號
+        </button>
       </div>
 
+      {/* Excel Upload Panel */}
+      {showUpload && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+          <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+            <IconZap className="w-5 h-5 text-indigo-600" />
+            上傳 Excel 批次建立學生帳號
+          </h3>
+          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
+            <p className="text-xs text-indigo-800 leading-relaxed">
+              Excel 檔案須包含以下欄位：<strong>學號</strong>（必填）、<strong>姓名</strong>（選填，未填則以學號代替）。
+              系統會自動產生密碼，建立完成後可下載帳號密碼清單。
+            </p>
+            <div className="mt-3 flex items-center gap-3">
+              <label className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold cursor-pointer transition ${
+                uploading ? 'bg-slate-200 text-slate-400' : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                {uploading ? '處理中...' : '選擇 Excel 檔案'}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={handleExcelUpload}
+                  disabled={uploading}
+                />
+              </label>
+              <span className="text-[10px] text-slate-400">支援 .xlsx / .xls / .csv</span>
+            </div>
+          </div>
+
+          {/* Result Message */}
+          {message && (
+            <div className={`p-3 rounded-xl text-sm font-medium ${
+              errors.length > 0 ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' : 'bg-green-50 text-green-800 border border-green-200'
+            }`}>
+              {message}
+            </div>
+          )}
+
+          {/* Error List */}
+          {errors.length > 0 && (
+            <div className="bg-red-50 border border-red-100 rounded-xl p-3">
+              <p className="text-xs font-bold text-red-700 mb-1">失敗項目：</p>
+              {errors.map((e, i) => (
+                <p key={i} className="text-xs text-red-600">{e.studentId}：{e.error}</p>
+              ))}
+            </div>
+          )}
+
+          {/* Created Accounts Table */}
+          {createdAccounts.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-bold text-slate-700">已建立帳號（請下載保存密碼）</h4>
+                <button
+                  onClick={downloadAccountList}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-bold hover:bg-green-700 transition"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  下載帳號密碼 CSV
+                </button>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden max-h-64 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-400 text-[10px] uppercase font-black sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2 text-left">學號</th>
+                      <th className="px-4 py-2 text-left">姓名</th>
+                      <th className="px-4 py-2 text-left">密碼</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {createdAccounts.map((a, i) => (
+                      <tr key={i}>
+                        <td className="px-4 py-2 font-medium text-slate-700">{a.studentId}</td>
+                        <td className="px-4 py-2 text-slate-600">{a.name}</td>
+                        <td className="px-4 py-2 font-mono text-xs text-indigo-600">{a.password}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Existing Users Table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         <table className="w-full text-left">
           <thead className="bg-slate-50 text-slate-400 uppercase text-[10px] font-black tracking-widest">
@@ -45,17 +256,17 @@ const AdminUserManagement: React.FC = () => {
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                     u.role === 'ADMIN' ? 'bg-purple-100 text-purple-600' :
                     u.role === 'TEACHER' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'
-                  }`}>{u.role}</span>
+                  }`}>{u.role === 'ADMIN' ? '管理員' : u.role === 'TEACHER' ? '教師' : '學生'}</span>
                 </td>
                 <td className="px-6 py-4">
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                     u.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'
-                  }`}>{u.status}</span>
+                  }`}>{u.status === 'ACTIVE' ? '啟用' : '停用'}</span>
                 </td>
               </tr>
             ))}
             {users.length === 0 && (
-              <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400">連接後端後顯示用戶列表</td></tr>
+              <tr><td colSpan={4} className="px-6 py-12 text-center text-slate-400">尚無用戶資料</td></tr>
             )}
           </tbody>
         </table>

@@ -29,7 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRole, userName, activeTab, set
     { id: 'ar-practice', label: 'AR 模擬練習', Icon: IconEye, roles: [UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT], external: '/ar/index.html' },
     { id: 'ar-report', label: 'AR 練習報表', Icon: IconChart, roles: [UserRole.TEACHER, UserRole.ADMIN] },
     { id: 'exams', label: '測驗系統', Icon: IconZap, roles: [UserRole.TEACHER, UserRole.STUDENT] },
-    { id: 'admin-users', label: '用戶管理', Icon: IconUser, roles: [UserRole.ADMIN] },
+    { id: 'admin-users', label: '用戶管理', Icon: IconUser, roles: [UserRole.ADMIN, UserRole.TEACHER] },
     { id: 'admin', label: '系統架構', Icon: IconSettings, roles: [UserRole.ADMIN] },
   ] as const;
 
