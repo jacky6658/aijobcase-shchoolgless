@@ -95,6 +95,7 @@ app.use('/api/materials', require('./routes/materials'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/exams', require('./routes/exams'));
 app.use('/api/users', require('./routes/users'));
+app.use('/api/ar-practice', require('./routes/ar-practice'));
 
 // ==================== Health Check ====================
 app.get('/api/health', async (req, res) => {
@@ -111,6 +112,11 @@ if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
   app.use(express.static(clientDist));
   app.get('*', (req, res) => {
+    // AR page has its own index.html
+    if (req.path.startsWith('/ar')) {
+      const arFile = path.join(clientDist, req.path.endsWith('.html') ? req.path : 'ar/index.html');
+      return res.sendFile(arFile);
+    }
     res.sendFile(path.join(clientDist, 'index.html'));
   });
 }

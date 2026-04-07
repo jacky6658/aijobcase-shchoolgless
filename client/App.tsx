@@ -18,7 +18,14 @@ const App: React.FC = () => {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
   if (!user) {
-    return <LoginView onLoginSuccess={() => setUser(authService.getCurrentUser())} />;
+    return <LoginView onLoginSuccess={() => {
+      const loggedInUser = authService.getCurrentUser();
+      setUser(loggedInUser);
+      // Students go directly to AR practice page
+      if (loggedInUser?.role === UserRole.STUDENT) {
+        window.location.href = '/ar/index.html';
+      }
+    }} />;
   }
 
   const handleLogout = () => {

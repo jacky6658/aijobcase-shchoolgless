@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "client",
+      "runtimeExecutable": "/usr/local/Cellar/node/24.3.0/bin/node",
+      "runtimeArgs": ["/Users/user/Downloads/aijobcase-shchoolgless/client/node_modules/vite/bin/vite.js", "--host", "0.0.0.0"],
+      "port": 5173,
+      "cwd": "/Users/user/Downloads/aijobcase-shchoolgless/client"
+    }
+  ]
+}

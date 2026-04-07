@@ -8,7 +8,8 @@ import {
   IconChat,
   IconZap,
   IconSettings,
-  IconUser
+  IconUser,
+  IconEye
 } from './Icons';
 
 interface SidebarProps {
@@ -24,10 +25,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRole, userName, activeTab, set
     { id: 'courses', label: '我的課程', Icon: IconBook, roles: [UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT] },
     { id: 'materials', label: '教材管理', Icon: IconFile, roles: [UserRole.TEACHER, UserRole.ADMIN] },
     { id: 'ai-chat', label: 'AI 課業問答', Icon: IconChat, roles: [UserRole.TEACHER, UserRole.STUDENT] },
+    { id: 'ar-practice', label: 'AR 模擬練習', Icon: IconEye, roles: [UserRole.ADMIN, UserRole.TEACHER, UserRole.STUDENT], external: '/ar/index.html' },
     { id: 'exams', label: '測驗系統', Icon: IconZap, roles: [UserRole.TEACHER, UserRole.STUDENT] },
     { id: 'admin-users', label: '用戶管理', Icon: IconUser, roles: [UserRole.ADMIN] },
     { id: 'admin', label: '系統架構', Icon: IconSettings, roles: [UserRole.ADMIN] },
-  ];
+  ] as const;
 
   const filteredMenu = menuItems.filter(item => item.roles.includes(currentRole));
 
@@ -44,13 +46,22 @@ const Sidebar: React.FC<SidebarProps> = ({ currentRole, userName, activeTab, set
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                if ('external' in item && item.external) {
+                  window.open(item.external, '_blank');
+                } else {
+                  setActiveTab(item.id);
+                }
+              }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
                 activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
               }`}
             >
               <ActiveIcon className="w-5 h-5" />
               <span className="font-medium text-sm">{item.label}</span>
+              {'external' in item && item.external && (
+                <svg className="w-3 h-3 ml-auto opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+              )}
             </button>
           );
         })}

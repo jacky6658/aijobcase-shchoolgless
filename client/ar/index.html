@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AR 隱形眼鏡模擬練習 | EduMind AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./ar-styles.css">
+    <!-- MediaPipe loaded via npm, bundled by Vite -->
+</head>
+<body class="bg-black text-white overflow-hidden select-none" style="font-family: 'Inter', 'Microsoft JhengHei', sans-serif;">
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 z-50 bg-slate-900 flex flex-col items-center justify-center">
+        <div class="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center mb-4">
+            <svg class="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+        </div>
+        <h2 class="text-xl font-semibold mb-2">AR 隱形眼鏡模擬系統</h2>
+        <p id="loading-status" class="text-slate-400 text-sm">正在載入 AI 模型...</p>
+        <div class="w-64 h-2 bg-slate-700 rounded-full mt-4 overflow-hidden">
+            <div id="loading-bar" class="h-full bg-indigo-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <!-- Camera Permission Denied -->
+    <div id="camera-denied" class="fixed inset-0 z-50 bg-slate-900 flex-col items-center justify-center hidden">
+        <div class="text-center p-8">
+            <svg class="w-16 h-16 text-red-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+            <h2 class="text-xl font-semibold mb-2">需要攝影機權限</h2>
+            <p class="text-slate-400 mb-4">AR 模擬需要使用您的攝影機。請在瀏覽器設定中允許攝影機存取。</p>
+            <button onclick="location.reload()" class="px-6 py-2 bg-indigo-600 rounded-lg hover:bg-indigo-700">重新整理頁面</button>
+        </div>
+    </div>
+
+    <!-- Main AR Interface -->
+    <div id="ar-app" class="fixed inset-0 hidden">
+        <!-- Top Bar -->
+        <div id="top-bar" class="absolute top-0 left-0 right-0 z-30 bg-gradient-to-b from-black/70 to-transparent px-4 py-3 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2 text-white/80 hover:text-white transition">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                <span class="text-sm">返回系統</span>
+            </a>
+            <h1 class="text-sm font-medium">AR 隱形眼鏡模擬練習</h1>
+            <div class="flex items-center gap-3">
+                <span id="user-name" class="text-sm text-white/70"></span>
+            </div>
+        </div>
+
+        <!-- Camera + Canvas -->
+        <video id="camera-video" autoplay playsinline class="absolute inset-0 w-full h-full object-cover mirror"></video>
+        <canvas id="lens-canvas" class="absolute inset-0 w-full h-full object-cover mirror"></canvas>
+
+        <!-- No Face Detected Overlay -->
+        <div id="no-face-msg" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-black/60 px-6 py-3 rounded-xl text-white/80 text-sm hidden">
+            請將臉部對準鏡頭
+        </div>
+
+        <!-- Mode Toggle + Selector -->
+        <div id="mode-selector" class="absolute top-16 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2">
+            <!-- Mode Toggle -->
+            <div class="flex bg-black/50 backdrop-blur rounded-full p-1">
+                <button id="mode-contact" class="mode-btn active px-4 py-1.5 rounded-full text-xs font-medium transition">隱形眼鏡</button>
+                <button id="mode-glasses" class="mode-btn px-4 py-1.5 rounded-full text-xs font-medium transition">眼鏡</button>
+            </div>
+            <!-- Contact Lens Colors -->
+            <div id="contact-options" class="flex gap-2 bg-black/50 backdrop-blur rounded-full px-3 py-2">
+                <button data-color="clear" class="lens-color-btn active w-8 h-8 rounded-full border-2 border-white/50 bg-white/20" title="透明"></button>
+                <button data-color="blue" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-blue-400/60" title="藍色"></button>
+                <button data-color="green" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-green-400/60" title="綠色"></button>
+                <button data-color="brown" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-amber-600/60" title="棕色"></button>
+                <button data-color="grey" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-gray-400/60" title="灰色"></button>
+            </div>
+            <!-- Glasses Styles -->
+            <div id="glasses-options" class="hidden flex gap-2 bg-black/50 backdrop-blur rounded-full px-3 py-2">
+                <button data-glasses="black" class="glasses-btn active px-3 py-1 rounded-full text-xs border border-white/30 bg-gray-900/80 text-white">黑框</button>
+                <button data-glasses="tortoise" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-amber-800/60 text-white">玳瑁</button>
+                <button data-glasses="gold" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-yellow-600/60 text-white">金屬</button>
+                <button data-glasses="red" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-red-700/60 text-white">紅框</button>
+                <button data-glasses="sunglasses" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-gray-800/80 text-white">墨鏡</button>
+            </div>
+        </div>
+
+        <!-- Left Panel: Guidance Steps -->
+        <div id="guidance-panel" class="absolute left-4 top-24 bottom-20 z-20 w-72">
+            <div class="bg-black/60 backdrop-blur-md rounded-2xl p-4 h-full flex flex-col">
+                <h3 class="text-sm font-semibold text-white/90 mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    操作步驟
+                </h3>
+                <div id="steps-list" class="flex-1 space-y-2 overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <!-- Right Panel: AI Chat -->
+        <div id="chat-panel" class="absolute right-4 top-24 bottom-20 z-20 w-80">
+            <div class="bg-black/60 backdrop-blur-md rounded-2xl p-4 h-full flex flex-col">
+                <h3 class="text-sm font-semibold text-white/90 mb-3 flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                    AI 助教
+                </h3>
+                <div id="chat-messages" class="flex-1 overflow-y-auto space-y-3 mb-3">
+                    <div class="text-xs text-white/50 text-center py-4">有任何操作問題，隨時提問！</div>
+                </div>
+                <div class="flex gap-2">
+                    <input id="chat-input" type="text" placeholder="輸入問題..." class="flex-1 bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:border-indigo-400">
+                    <button id="btn-mic" class="w-9 h-9 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition" title="語音提問">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0m7 7v4m-4 0h8M12 1a3 3 0 00-3 3v4a3 3 0 006 0V4a3 3 0 00-3-3z"/></svg>
+                    </button>
+                    <button id="btn-send" class="w-9 h-9 flex items-center justify-center rounded-lg bg-indigo-600 hover:bg-indigo-700 transition" title="發送">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                    </button>
+                </div>
+                <div id="voice-timer" class="hidden mt-2 text-center">
+                    <span class="text-xs text-red-400 animate-pulse">🎤 錄音中 <span id="voice-countdown">30</span>s</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Control Bar -->
+        <div id="control-bar" class="absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-black/70 to-transparent px-6 py-4 flex items-center justify-center gap-4">
+            <button id="btn-start" class="px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-xl text-sm font-medium flex items-center gap-2 transition">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                開始練習
+            </button>
+            <button id="btn-pause" class="px-5 py-2.5 bg-yellow-600 hover:bg-yellow-700 rounded-xl text-sm font-medium flex items-center gap-2 transition hidden">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+                暫停
+            </button>
+            <button id="btn-resume" class="px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-xl text-sm font-medium flex items-center gap-2 transition hidden">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                繼續
+            </button>
+            <button id="btn-end" class="px-5 py-2.5 bg-red-600 hover:bg-red-700 rounded-xl text-sm font-medium flex items-center gap-2 transition hidden">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                結束儲存
+            </button>
+            <div id="session-timer" class="ml-4 bg-white/10 px-4 py-2 rounded-xl text-sm font-mono hidden">
+                ⏱ <span id="timer-display">00:00</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./ar-main.ts"></script>
+</body>
+</html>
