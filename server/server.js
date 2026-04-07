@@ -112,7 +112,7 @@ app.get('/api/health', async (req, res) => {
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, '..', 'client', 'dist');
   app.use(express.static(clientDist));
-  app.get('*', (req, res) => {
+  app.get('{*path}', (req, res) => {
     // AR page has its own index.html
     if (req.path.startsWith('/ar')) {
       const arFile = path.join(clientDist, req.path.endsWith('.html') ? req.path : 'ar/index.html');
