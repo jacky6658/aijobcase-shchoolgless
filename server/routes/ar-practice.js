@@ -70,6 +70,22 @@ router.get('/sessions', async (req, res) => {
   }
 });
 
+// GET /api/ar-practice/students/:studentId/sessions - Teacher: list specific student sessions
+router.get('/students/:studentId/sessions', async (req, res) => {
+  if (req.user.role !== 'TEACHER' && req.user.role !== 'ADMIN') {
+    return res.status(403).json({ success: false, error: 'Forbidden' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM ar_practice_sessions WHERE student_id = $1 ORDER BY created_at DESC LIMIT 50`,
+      [req.params.studentId]
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/ar-practice/students - Teacher: list all students with practice stats
 router.get('/students', async (req, res) => {
   if (req.user.role !== 'TEACHER' && req.user.role !== 'ADMIN') {

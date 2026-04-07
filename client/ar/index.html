@@ -47,6 +47,12 @@
             </a>
             <h1 class="text-sm font-medium">AR 隱形眼鏡模擬練習</h1>
             <div class="flex items-center gap-3">
+                <button id="btn-history" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition" title="練習紀錄">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </button>
+                <button id="btn-fullscreen" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition" title="全螢幕">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                </button>
                 <span id="user-name" class="text-sm text-white/70"></span>
             </div>
         </div>
@@ -82,6 +88,13 @@
                 <button data-glasses="gold" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-yellow-600/60 text-white">金屬</button>
                 <button data-glasses="red" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-red-700/60 text-white">紅框</button>
                 <button data-glasses="sunglasses" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-gray-800/80 text-white">墨鏡</button>
+            </div>
+            <!-- Size Adjustment Slider -->
+            <div id="size-slider" class="flex items-center gap-2 bg-black/50 backdrop-blur rounded-full px-4 py-2">
+                <span class="text-[10px] text-white/60">小</span>
+                <input id="size-range" type="range" min="50" max="150" value="100" class="w-28 h-1 accent-indigo-500 cursor-pointer" title="調整大小">
+                <span class="text-[10px] text-white/60">大</span>
+                <span id="size-label" class="text-[10px] text-white/50 ml-1">100%</span>
             </div>
         </div>
 
@@ -141,6 +154,25 @@
             </button>
             <div id="session-timer" class="ml-4 bg-white/10 px-4 py-2 rounded-xl text-sm font-mono hidden">
                 ⏱ <span id="timer-display">00:00</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Practice History Modal -->
+    <div id="history-modal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" id="history-backdrop"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 rounded-2xl w-[480px] max-w-[90vw] max-h-[70vh] overflow-hidden border border-slate-700">
+            <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                <h3 class="text-sm font-semibold flex items-center gap-2">
+                    <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    我的練習紀錄
+                </h3>
+                <button id="history-close" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition text-white/60 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div id="history-list" class="p-4 overflow-y-auto max-h-[50vh] space-y-2">
+                <div class="text-center text-white/40 text-sm py-8">載入中...</div>
             </div>
         </div>
     </div>

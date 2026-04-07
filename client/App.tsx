@@ -9,6 +9,7 @@ import CourseList from './components/CourseList';
 import UsageView from './components/UsageView';
 import LoginView from './components/LoginView';
 import AdminUserManagement from './components/AdminUserManagement';
+import ARPracticeReport from './components/ARPracticeReport';
 import { UserRole, User } from './types';
 import { authService } from './services/authService';
 
@@ -48,6 +49,7 @@ const App: React.FC = () => {
       case 'ai-chat': return (
         <AIChatView courseId={selectedCourseId || ''} />
       );
+      case 'ar-report': return <ARPracticeReport />;
       case 'exams': return (
         <div className="text-center py-20 text-slate-400">
           <h2 className="text-2xl font-bold mb-2">測驗系統</h2>

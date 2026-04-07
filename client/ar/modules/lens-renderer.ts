@@ -18,6 +18,7 @@ const LENS_COLORS: Record<LensColor, { inner: string; outer: string; opacity: nu
 };
 
 const LENS_SIZE_MULTIPLIER = 1.8;
+const DEFAULT_GLASSES_SCALE = 2.8;
 
 export class LensRenderer {
   private canvas: HTMLCanvasElement;
@@ -25,6 +26,8 @@ export class LensRenderer {
   private color: LensColor = 'clear';
   private mode: RenderMode = 'contact';
   private glassesStyle = 'black';
+  private glassesScale = DEFAULT_GLASSES_SCALE;
+  private lensScale = LENS_SIZE_MULTIPLIER;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -35,6 +38,10 @@ export class LensRenderer {
   setMode(mode: RenderMode) { this.mode = mode; }
   setGlassesStyle(style: string) { this.glassesStyle = style; }
   getMode(): RenderMode { return this.mode; }
+  setGlassesScale(scale: number) { this.glassesScale = scale; }
+  setLensScale(scale: number) { this.lensScale = scale; }
+  getGlassesScale() { return this.glassesScale; }
+  getLensScale() { return this.lensScale; }
 
   resize(width: number, height: number) {
     this.canvas.width = width;
@@ -48,7 +55,7 @@ export class LensRenderer {
   private renderContactLens(eye: EyeData) {
     const ctx = this.ctx;
     const { irisCenter, irisRadius } = eye;
-    const lensRadius = irisRadius * LENS_SIZE_MULTIPLIER;
+    const lensRadius = irisRadius * this.lensScale;
     const colorDef = LENS_COLORS[this.color];
 
     ctx.save();
@@ -97,8 +104,8 @@ export class LensRenderer {
     const centerY = (leftEye.irisCenter.y + rightEye.irisCenter.y) / 2;
     const eyeDistance = Math.abs(rightEye.irisCenter.x - leftEye.irisCenter.x);
 
-    // Glasses image width ~2.8x the eye distance
-    const glassesWidth = eyeDistance * 2.8;
+    // Glasses image width scaled by eye distance
+    const glassesWidth = eyeDistance * this.glassesScale;
     const aspectRatio = img.naturalHeight / img.naturalWidth;
     const glassesHeight = glassesWidth * aspectRatio;
 

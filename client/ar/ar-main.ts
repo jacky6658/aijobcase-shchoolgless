@@ -152,6 +152,76 @@ function onFaceResult(result: FaceResult) {
   }
 }
 
+// Size slider
+const sizeRange = document.getElementById('size-range') as HTMLInputElement;
+const sizeLabel = document.getElementById('size-label')!;
+
+sizeRange.addEventListener('input', () => {
+  const pct = parseInt(sizeRange.value, 10);
+  sizeLabel.textContent = `${pct}%`;
+  const mode = renderer.getMode();
+  if (mode === 'glasses') {
+    renderer.setGlassesScale(2.8 * (pct / 100));
+  } else {
+    renderer.setLensScale(1.8 * (pct / 100));
+  }
+});
+
+// Fullscreen toggle
+const btnFullscreen = document.getElementById('btn-fullscreen')!;
+btnFullscreen.addEventListener('click', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+});
+
+// Practice history modal
+const btnHistory = document.getElementById('btn-history')!;
+const historyModal = document.getElementById('history-modal')!;
+const historyClose = document.getElementById('history-close')!;
+const historyBackdrop = document.getElementById('history-backdrop')!;
+const historyList = document.getElementById('history-list')!;
+
+async function loadHistory() {
+  const token = localStorage.getItem('edumind_token');
+  if (!token) return;
+  historyList.innerHTML = '<div class="text-center text-white/40 text-sm py-8">載入中...</div>';
+  try {
+    const res = await fetch('/api/ar-practice/sessions', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const json = await res.json();
+    if (!json.success || !json.data.length) {
+      historyList.innerHTML = '<div class="text-center text-white/40 text-sm py-8">尚無練習紀錄</div>';
+      return;
+    }
+    historyList.innerHTML = json.data.map((s: any) => {
+      const date = new Date(s.created_at || s.started_at).toLocaleString('zh-TW');
+      const dur = s.duration_seconds ? `${Math.floor(s.duration_seconds / 60)}分${s.duration_seconds % 60}秒` : '--';
+      const statusColor = s.status === 'COMPLETED' ? 'text-green-400' : s.status === 'IN_PROGRESS' ? 'text-yellow-400' : 'text-red-400';
+      const statusText = s.status === 'COMPLETED' ? '已完成' : s.status === 'IN_PROGRESS' ? '進行中' : '未完成';
+      return `<div class="flex items-center justify-between bg-white/5 rounded-xl px-4 py-3 border border-white/10">
+        <div>
+          <div class="text-xs text-white/80">${date}</div>
+          <div class="text-[10px] text-white/40 mt-0.5">完成 ${s.steps_completed ?? 0}/6 步驟 · ${dur}</div>
+        </div>
+        <span class="text-xs font-medium ${statusColor}">${statusText}</span>
+      </div>`;
+    }).join('');
+  } catch {
+    historyList.innerHTML = '<div class="text-center text-red-400 text-sm py-8">載入失敗</div>';
+  }
+}
+
+btnHistory.addEventListener('click', () => {
+  historyModal.classList.remove('hidden');
+  loadHistory();
+});
+historyClose.addEventListener('click', () => historyModal.classList.add('hidden'));
+historyBackdrop.addEventListener('click', () => historyModal.classList.add('hidden'));
+
 // Mode toggle (contact lens / glasses)
 const modeContact = document.getElementById('mode-contact')!;
 const modeGlasses = document.getElementById('mode-glasses')!;
@@ -164,6 +234,9 @@ modeContact.addEventListener('click', () => {
   modeGlasses.classList.remove('active');
   contactOptions.classList.remove('hidden');
   glassesOptions.classList.add('hidden');
+  // Reset size slider to current lens scale
+  sizeRange.value = String(Math.round((renderer.getLensScale() / 1.8) * 100));
+  sizeLabel.textContent = `${sizeRange.value}%`;
 });
 
 modeGlasses.addEventListener('click', () => {
@@ -172,6 +245,9 @@ modeGlasses.addEventListener('click', () => {
   modeContact.classList.remove('active');
   glassesOptions.classList.remove('hidden');
   contactOptions.classList.add('hidden');
+  // Reset size slider to current glasses scale
+  sizeRange.value = String(Math.round((renderer.getGlassesScale() / 2.8) * 100));
+  sizeLabel.textContent = `${sizeRange.value}%`;
 });
 
 // Lens color selection
