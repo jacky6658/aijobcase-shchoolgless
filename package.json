@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\"",
-    "build": "cd client && npm run build",
+    "build": "cd client && npx vite build",
     "start": "cd server && node server.js",
     "init-db": "cd server && node init-db.js",
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
+    "install:all": "npm install && cd client && npm install --include=dev && cd ../server && npm install"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
