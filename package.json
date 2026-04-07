@@ -1,24 +1,15 @@
 {
-  "name": "edumind-ai---多租戶-saas-教材問答平台",
+  "name": "edumind-ai",
+  "version": "1.0.0",
   "private": true,
-  "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "@google/genai": "^1.38.0",
-    "recharts": "^3.7.0",
-    "next": "^16.1.5"
+    "dev": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\"",
+    "build": "cd client && npm run build",
+    "start": "cd server && node server.js",
+    "init-db": "cd server && node init-db.js",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "concurrently": "^9.1.2"
   }
 }

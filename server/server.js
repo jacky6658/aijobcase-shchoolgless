@@ -1,0 +1,149 @@
+/**
+ * EduMind AI - Express Server
+ * AI 課程複習助教系統 MVP
+ */
+require('dotenv').config();
+
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
+const multer = require('multer');
+const { pool } = require('./db');
+const { requireAuth } = require('./middleware/authMiddleware');
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// ==================== Security ====================
+app.use(helmet({ contentSecurityPolicy: false }));
+
+// ==================== Rate Limiting ====================
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: '請求過於頻繁，請稍後再試' },
+});
+app.use('/api', globalLimiter);
+
+// ==================== CORS ====================
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+];
+if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else if (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS 拒絕: ${origin}`);
+      callback(new Error('CORS 不允許此 origin'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// ==================== Body Parser ====================
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// ==================== File Upload (Multer) ====================
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+    ];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('僅接受 PDF、Word、PPT、Excel 檔案'), false);
+    }
+  },
+});
+app.locals.upload = upload;
+
+// ==================== Request Logging ====================
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  }
+  next();
+});
+
+// ==================== Auth Middleware ====================
+app.use('/api', requireAuth);
+
+// ==================== Routes ====================
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/courses', require('./routes/courses'));
+app.use('/api/materials', require('./routes/materials'));
+app.use('/api/chat', require('./routes/chat'));
+app.use('/api/exams', require('./routes/exams'));
+app.use('/api/users', require('./routes/users'));
+
+// ==================== Health Check ====================
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ success: true, data: { status: 'ok', db: 'connected' } });
+  } catch (err) {
+    res.status(503).json({ success: false, error: 'DB 連線失敗' });
+  }
+});
+
+// ==================== Static Files (Production) ====================
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
+// ==================== Error Handler ====================
+app.use((err, req, res, next) => {
+  console.error('❌ Unhandled error:', err.message);
+  res.status(500).json({ success: false, error: '伺服器內部錯誤' });
+});
+
+// ==================== Start Server ====================
+async function startServer() {
+  try {
+    await pool.query('SELECT 1');
+    console.log('✅ Database connected');
+  } catch (err) {
+    console.warn('⚠️ Database not available:', err.message);
+    console.warn('   Server will start but DB features may fail');
+  }
+
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 EduMind AI Server running on port ${PORT}`);
+    console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+
+  process.on('SIGTERM', () => {
+    console.log('🛑 SIGTERM received, shutting down...');
+    server.close(() => {
+      pool.end();
+      console.log('✅ Server closed');
+      process.exit(0);
+    });
+  });
+}
+
+startServer();

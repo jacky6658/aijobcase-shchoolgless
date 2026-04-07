@@ -1,0 +1,28 @@
+{
+  "name": "edumind-ai-server",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "init-db": "node init-db.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "cors": "^2.8.6",
+    "helmet": "^8.1.0",
+    "express-rate-limit": "^8.3.1",
+    "body-parser": "^2.2.2",
+    "pg": "^8.18.0",
+    "dotenv": "^17.3.1",
+    "multer": "^2.1.0",
+    "bcryptjs": "^3.0.2",
+    "jsonwebtoken": "^9.0.2",
+    "@google/genai": "^1.38.0",
+    "pdf-parse": "^2.4.5",
+    "mammoth": "^1.9.0",
+    "xlsx": "^0.18.5",
+    "p-limit": "^6.2.0",
+    "adm-zip": "^0.5.16"
+  }
+}
