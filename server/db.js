@@ -17,6 +17,9 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
   allowExitOnIdle: true,
+  ssl: DATABASE_URL.includes('supabase') || DATABASE_URL.includes('neon') || process.env.DB_SSL === 'true'
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
 pool.on('error', (err) => {

@@ -38,14 +38,15 @@ if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else if (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS 拒絕: ${origin}`);
-      callback(new Error('CORS 不允許此 origin'));
-    }
+    // Production: same-origin requests (no origin header)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow localhost dev
+    if (/^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) return callback(null, true);
+    // Allow Render / Supabase / any HTTPS deploy
+    if (/\.onrender\.com$/.test(origin) || /\.zeabur\.app$/.test(origin)) return callback(null, true);
+    console.warn(`CORS 拒絕: ${origin}`);
+    callback(new Error('CORS 不允許此 origin'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
