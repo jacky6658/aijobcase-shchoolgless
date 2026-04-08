@@ -34,10 +34,23 @@
 - [x] 資料庫系統（PostgreSQL 16 + pgvector）
 - [x] AI 語音助理（Speech-to-Text + Gemini 智慧回覆）
 
+#### 雲端部署
+- [x] Supabase PostgreSQL + pgvector 資料庫建立完成
+- [x] Render.com Web Service 部署設定完成
+- [x] 環境變數設定（DATABASE_URL, JWT_SECRET, NODE_ENV）
+- [x] Build 成功（前端 + AR 頁面打包）
+- [ ] 修復 DB 連線問題（密碼特殊字元 URL encode）
+- [ ] 設定 Gemini API Key（AI 聊天 + 自動出題功能需要）
+
+#### 批次建帳
+- [x] Excel 上傳批次建立學生帳號（教師 + 管理員可用）
+- [x] 自動產生隨機密碼 + CSV 下載
+
 ### 待完成項目
-- [ ] 雲端部署（Zeabur）— 上線為「線上可使用」狀態
-- [ ] 系統操作說明文件
-- [ ] 行動裝置 RWD 優化（手機版面板佈局）
+- [ ] 修復 Render 部署 DB 連線（DATABASE_URL 密碼 `!` → `%21`）
+- [ ] 申請並設定 Gemini API Key（AI 功能啟用）
+- [ ] 系統操作說明文件（交付項目）
+- [ ] 行動裝置 RWD 優化（手機版 AR 面板佈局）
 
 ## 角色權限對照表
 
@@ -177,13 +190,29 @@ npm run dev
 | `/api/ar-practice/students` | GET | 教師查看學生練習報表 |
 | `/api/ar-practice/students/:id/sessions` | GET | 教師查看學生詳細紀錄 |
 
-## 部署
+## 部署（Render + Supabase）
 
-Production 模式下 Express 同時靜態伺服前端 `client/dist/`：
+### 線上網址
+- 主系統：https://edumind-ai-107n.onrender.com
+- AR 模擬：https://edumind-ai-107n.onrender.com/ar/index.html
+
+### 架構
+- **前端 + 後端**：Render.com Web Service（Node.js）
+- **資料庫**：Supabase PostgreSQL + pgvector（Asia-Pacific）
+
+### 本地 Production 模式
 
 ```bash
 npm run build   # 打包前端（含 AR 頁面）
 npm start       # 啟動後端 + 靜態檔案
 ```
 
-環境變數：`DATABASE_URL`, `GEMINI_API_KEY`, `JWT_SECRET`, `NODE_ENV=production`, `PORT`
+### 環境變數
+
+| 變數 | 說明 |
+|------|------|
+| `DATABASE_URL` | Supabase PostgreSQL connection string |
+| `GEMINI_API_KEY` | Google Gemini API Key（AI 功能） |
+| `JWT_SECRET` | JWT 簽名密鑰 |
+| `NODE_ENV` | `production` |
+| `PORT` | 預設 3001 |
