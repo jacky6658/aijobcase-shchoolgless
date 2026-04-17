@@ -1,10 +1,12 @@
 # EduMind AI — 擬真隱形眼鏡/眼鏡 AR 教學平台 + AI 智能語音助理
 
+> **本專案現正針對 新生醫專 (HSC11504504) 之護理教學場域進行「AI 語音對話邏輯」與「AR 模擬定位精準度」之客製化調教與優化測試，預計於決標後 30 日內交付最終穩定版。**
+
 結合 **AR 擴增實境** 與 **AI 語音互動** 的教學平台，提供擬真隱形眼鏡/眼鏡配戴模擬、課程教材管理、AI 問答與考題系統。
 
-## 開發進度
+## 開發進度與測試狀態
 
-### 已完成功能
+### 各模組開發與測試進度
 
 #### 學生端
 - [x] AR 配戴模擬（臉部偵測 + 隱眼/眼鏡即時疊加）
@@ -13,42 +15,42 @@
 - [x] 鏡片/眼鏡大小調整滑桿（50%~150%）
 - [x] 操作流程引導（6 步驟 + 自動偵測張眼/眨眼）
 - [x] 文字提問（AI 助教 SSE 串流回覆）
-- [x] 語音提問（Web Speech API，每次最長 30 秒）
+- [ ] 語音提問（Web Speech API — 護理情境語意優化調教中）
 - [x] 練習紀錄查看（彈窗顯示歷史紀錄）
 - [x] 全螢幕模式
-- [x] 每日使用次數限制（50 問/天）
+- [ ] 每日使用次數限制（配額策略測試中）
 
 #### 教師／管理端
 - [x] 課程管理（CRUD + 學生選課）
 - [x] 教材管理（PDF/DOCX/PPTX/XLSX 上傳 → 自動切片 → 向量化）
 - [x] AI 聊天（SSE 串流 + RAG 語意搜尋）
-- [x] 考題系統（AI 自動出題 + Excel 上傳 + 即時批改）
-- [x] AR 練習報表（查看學生練習次數、完成率、詳細紀錄）
+- [ ] 考題系統（AI 自動出題 + 批改邏輯優化中）
+- [x] AR 練習報表（查看學生練習次數、詳細紀錄）
 - [x] 用戶管理（批次建帳）
 
 #### 系統技術
 - [x] JWT 認證系統
-- [x] AR 擴增實境模組（face-api.js 臉部辨識 + 眼部定位）
+- [ ] AR 擴增實境模組（face-api.js 臉部辨識 + 眼部定位精準度校正中）
 - [x] 前端系統（React 19 + Vite + Tailwind CSS）
 - [x] 後端系統（Express.js 5）
 - [x] 資料庫系統（PostgreSQL 16 + pgvector）
-- [x] AI 語音助理（Speech-to-Text + Gemini 智慧回覆）
+- [ ] AI 語音助理（Speech-to-Text + Gemini 對話邏輯調教中）
 
 #### 雲端部署
-- [x] Supabase PostgreSQL + pgvector 資料庫建立完成
-- [x] Render.com Web Service 部署設定完成
+- [x] Supabase PostgreSQL + pgvector 資料庫建立
+- [x] Render.com Web Service 部署設定
 - [x] 環境變數設定（DATABASE_URL, JWT_SECRET, NODE_ENV）
-- [x] Build 成功（前端 + AR 頁面打包）
-- [ ] 修復 DB 連線問題（密碼特殊字元 URL encode）
-- [ ] 設定 Gemini API Key（AI 聊天 + 自動出題功能需要）
+- [x] Build 打包（前端 + AR 頁面）
+- [ ] DB 連線穩定性測試（密碼特殊字元 URL encode）
+- [ ] Gemini API Key 整合測試（AI 聊天 + 自動出題）
 
 #### 批次建帳
 - [x] Excel 上傳批次建立學生帳號（教師 + 管理員可用）
 - [x] 自動產生隨機密碼 + CSV 下載
 
-### 待完成項目
-- [ ] 修復 Render 部署 DB 連線（DATABASE_URL 密碼 `!` → `%21`）
-- [ ] 申請並設定 Gemini API Key（AI 功能啟用）
+### 待調整與優化項目
+- [ ] Render 部署 DB 連線優化（DATABASE_URL 密碼 `!` → `%21`）
+- [ ] Gemini API Key 整合與測試（AI 功能啟用）
 - [ ] 系統操作說明文件（交付項目）
 - [ ] 行動裝置 RWD 優化（手機版 AR 面板佈局）
 
