@@ -62,14 +62,23 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    const allowed = [
+    const allowedMime = [
       'application/pdf',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'application/vnd.ms-excel',
+      'application/octet-stream', // 部分上傳端（如某些瀏覽器或 curl 預設）會送這個
     ];
-    if (allowed.includes(file.mimetype)) {
+    const allowedExt = ['.pdf', '.docx', '.pptx', '.xlsx', '.xls'];
+    // 修正檔名 UTF-8 亂碼（multer 預設以 latin1 解析）
+    if (file.originalname) {
+      try {
+        file.originalname = Buffer.from(file.originalname, 'latin1').toString('utf8');
+      } catch (_) { /* keep original */ }
+    }
+    const ext = (file.originalname.match(/\.[^.]+$/)?.[0] || '').toLowerCase();
+    if (allowedMime.includes(file.mimetype) || allowedExt.includes(ext)) {
       cb(null, true);
     } else {
       cb(new Error('僅接受 PDF、Word、PPT、Excel 檔案'), false);

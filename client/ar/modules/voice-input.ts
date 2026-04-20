@@ -1,6 +1,8 @@
 /**
  * voice-input.ts - Web Speech API with 30-second limit
+ * 護理情境優化：多候選擇優 + 常見誤字修正
  */
+import { pickBestAlternative, correctTranscript } from './nursing-vocab';
 
 const MAX_DURATION = 30; // seconds
 
@@ -36,6 +38,7 @@ export class VoiceInput {
     recognition.lang = 'zh-TW';
     recognition.interimResults = true;
     recognition.continuous = true;
+    recognition.maxAlternatives = 3; // 多候選，後續挑最符合護理情境
 
     let finalTranscript = '';
     let remaining = MAX_DURATION;
@@ -46,19 +49,19 @@ export class VoiceInput {
     };
 
     recognition.onresult = (event: any) => {
-      let interim = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interim += event.results[i][0].transcript;
+          // 從多候選中挑「含最多護理關鍵字」的那句
+          const alternatives = Array.from(event.results[i]) as Array<{ transcript: string; confidence?: number }>;
+          finalTranscript += pickBestAlternative(alternatives);
         }
       }
     };
 
     recognition.onend = () => {
       this.cleanup();
-      const text = finalTranscript.trim();
+      // 套用常見誤字修正（印象眼鏡 → 隱形眼鏡、食言水 → 食鹽水 等）
+      const text = correctTranscript(finalTranscript.trim());
       if (text) this.onResult(text);
     };
 

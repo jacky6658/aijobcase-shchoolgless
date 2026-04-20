@@ -222,6 +222,20 @@ btnHistory.addEventListener('click', () => {
 historyClose.addEventListener('click', () => historyModal.classList.add('hidden'));
 historyBackdrop.addEventListener('click', () => historyModal.classList.add('hidden'));
 
+// Mobile FAB: toggle bottom-sheet panels (guidance / chat)
+const guidancePanel = document.getElementById('guidance-panel')!;
+const chatPanel = document.getElementById('chat-panel')!;
+const fabGuidance = document.getElementById('mobile-fab-guidance');
+const fabChat = document.getElementById('mobile-fab-chat');
+fabGuidance?.addEventListener('click', () => {
+  chatPanel.classList.remove('panel-open');
+  guidancePanel.classList.toggle('panel-open');
+});
+fabChat?.addEventListener('click', () => {
+  guidancePanel.classList.remove('panel-open');
+  chatPanel.classList.toggle('panel-open');
+});
+
 // Mode toggle (contact lens / glasses)
 const modeContact = document.getElementById('mode-contact')!;
 const modeGlasses = document.getElementById('mode-glasses')!;
