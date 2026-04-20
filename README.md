@@ -20,7 +20,7 @@
 - [x] 操作流程引導（6 步驟 + 自動偵測張眼/眨眼）
 - [x] 文字提問（AI 助教 SSE 串流回覆）
 - [x] AR 口罩補償定位（眼部偵測失效時以臉部輪廓估算）
-- [ ] 語音提問（Web Speech API — 護理情境語意優化調教中）
+- [x] 語音提問（Web Speech API + 護理關鍵字詞典 + 17 組同音誤字修正）
 - [x] 練習紀錄查看（彈窗顯示歷史紀錄）
 - [x] 全螢幕模式
 - [x] 每日使用次數限制（30 次 / 天，超限回覆親切提示）
@@ -41,7 +41,7 @@
 - [x] 後端系統（Express.js 5）
 - [x] 資料庫系統（PostgreSQL 16 + pgvector）
 - [x] 成本控管三層機制（Rate Limit + Sliding Window + Output 熔斷）
-- [ ] AI 語音助理（Speech-to-Text + Gemini 對話邏輯調教中）
+- [x] AI 語音助理（Speech-to-Text + Gemini 對話邏輯，護理情境詞典完成）
 
 #### 雲端部署
 - [x] Supabase PostgreSQL + pgvector 資料庫建立
@@ -55,10 +55,15 @@
 - [x] 自動產生隨機密碼 + CSV 下載
 
 ### 待完成項目
-- [ ] Zeabur 環境變數填入（DATABASE_URL + GEMINI_API_KEY）
-- [ ] 語音提問護理情境調教（Web Speech API 醫護關鍵字識別）
-- [ ] 行動裝置 RWD 優化（AR 頁面手機版面板佈局）
-- [ ] 系統操作說明文件（報價單交付項目，最後一週產出）
+- [ ] Zeabur 環境變數填入（DATABASE_URL + GEMINI_API_KEY）— 部署前動作
+- [x] 語音提問護理情境調教（[nursing-vocab.ts](client/ar/modules/nursing-vocab.ts)）
+- [x] 行動裝置 RWD 優化（AR 頁 bottom-sheet + 浮動切換鈕）
+- [x] 系統操作說明文件（[docs/操作手冊.md](docs/操作手冊.md)）
+
+### 已知待驗證（需瀏覽器 + 攝影機實測）
+- [ ] AR 口罩補償定位視覺效果（程式已加，需實機驗證）
+- [ ] AR RWD 在實機手機上的操作流暢度
+- [ ] Web Speech API 在不同瀏覽器的辨識率
 
 ## AI 成本控管機制
 
