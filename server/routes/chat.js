@@ -25,9 +25,10 @@ const HISTORY_WINDOW = 8;
  */
 router.post('/stream', async (req, res) => {
   const { message, courseId } = req.body;
-  if (!message || !courseId) {
-    return res.status(400).json({ success: false, error: '請提供 message 和 courseId' });
+  if (!message) {
+    return res.status(400).json({ success: false, error: '請提供 message' });
   }
+  // courseId 可為 null（AR 助教模式）：跳過 RAG、歷史按 course_id IS NULL 分組
 
   try {
     // 1. 【成本控管 #1】檢查每日用量，先計數再呼叫 API
@@ -54,26 +55,32 @@ router.post('/stream', async (req, res) => {
       });
     }
 
-    // 2. 向量搜尋相關教材
+    // 2. 向量搜尋相關教材（僅在有 courseId 時執行）
     let sources = [];
     let context = [];
-    try {
-      sources = await search(message, courseId, 5, 0.3);
-      context = sources.map(s => s.content);
-    } catch (err) {
-      console.warn('向量搜尋失敗，將無教材上下文回答:', err.message);
+    if (courseId) {
+      try {
+        sources = await search(message, courseId, 5, 0.3);
+        context = sources.map(s => s.content);
+      } catch (err) {
+        console.warn('向量搜尋失敗，將無教材上下文回答:', err.message);
+      }
     }
 
     // 3. 【成本控管 #2】Sliding Window：從 DB 取最近 8 則，新對話自動頂替舊的
     //    取 DESC 後 reverse 回正序，確保 Gemini history 時序正確
-    const { rows: historyRows } = await pool.query(
-      `SELECT role, content
-       FROM chat_messages
-       WHERE user_id = $1 AND course_id = $2
-       ORDER BY created_at DESC, id DESC
-       LIMIT $3`,
-      [req.user.id, courseId, HISTORY_WINDOW]
-    );
+    //    有 courseId 按課程分組；無 courseId（AR 助教）按 course_id IS NULL 分組
+    const historyQuery = courseId
+      ? `SELECT role, content FROM chat_messages
+         WHERE user_id = $1 AND course_id = $2
+         ORDER BY created_at DESC, id DESC LIMIT $3`
+      : `SELECT role, content FROM chat_messages
+         WHERE user_id = $1 AND course_id IS NULL
+         ORDER BY created_at DESC, id DESC LIMIT $2`;
+    const historyParams = courseId
+      ? [req.user.id, courseId, HISTORY_WINDOW]
+      : [req.user.id, HISTORY_WINDOW];
+    const { rows: historyRows } = await pool.query(historyQuery, historyParams);
     const history = historyRows.reverse(); // 轉回時間正序
 
     // 4. 設定 SSE headers
@@ -103,8 +110,8 @@ router.post('/stream', async (req, res) => {
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     res.end();
 
-    // 8. 背景存聊天紀錄
-    saveMessages(req.user.id, courseId, message, fullResponse, sourcesData)
+    // 8. 背景存聊天紀錄（courseId 可能為 undefined，轉成明確的 null）
+    saveMessages(req.user.id, courseId ?? null, message, fullResponse, sourcesData)
       .catch(err => console.error('存聊天紀錄失敗:', err.message));
 
   } catch (err) {
