@@ -16,6 +16,8 @@ export interface FaceResult {
   leftEye: EyeData;
   rightEye: EyeData;
   detected: boolean;
+  // 是否使用補償定位（口罩/低光源場景）
+  fallback?: boolean;
 }
 
 type OnResultCallback = (result: FaceResult) => void;
@@ -42,6 +44,37 @@ function smooth(current: EyeData, prev: EyeData | null): EyeData {
 
 function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+}
+
+/**
+ * 【PM 決策 #9】口罩／低光補償：從臉部 bounding box 估算眼睛位置
+ * 標準臉部比例：
+ *   - 眼睛 Y ≈ 臉部頂端往下 33%
+ *   - 左眼 X ≈ 臉部左側往右 28%，右眼 X ≈ 72%
+ *   - 虹膜半徑 ≈ 臉寬的 8%
+ */
+function estimateEyeFromFaceBox(
+  box: { x: number; y: number; width: number; height: number },
+  isLeft: boolean
+): EyeData {
+  const eyeY  = box.y + box.height * 0.33;
+  const eyeX  = isLeft
+    ? box.x + box.width * 0.28
+    : box.x + box.width * 0.72;
+  const radius = box.width * 0.08;
+
+  // 產生 6 個假輪廓點（橢圓近似），讓 smooth() 有東西可以插值
+  const contour = Array.from({ length: 6 }, (_, i) => {
+    const angle = (i / 6) * Math.PI * 2;
+    return { x: eyeX + Math.cos(angle) * radius, y: eyeY + Math.sin(angle) * radius * 0.4 };
+  });
+
+  return {
+    irisCenter: { x: eyeX, y: eyeY },
+    irisRadius: radius,
+    contour,
+    aperture: 0.3, // 預設半睜眼狀態
+  };
 }
 
 function extractEyeFromLandmarks(points: faceapi.Point[], isLeft: boolean): EyeData {
@@ -135,15 +168,30 @@ export async function initFaceDetector(
         } else {
           const points = result.landmarks.positions;
 
-          let leftEye = extractEyeFromLandmarks(points, true);
+          let leftEye  = extractEyeFromLandmarks(points, true);
           let rightEye = extractEyeFromLandmarks(points, false);
 
-          leftEye = smooth(leftEye, prevLeft);
+          // 【PM 決策 #9】口罩補償：若眼部 aperture 過低（眼睛被遮擋）
+          // 改用臉部 bounding box 估算位置，避免定位漂移
+          const APERTURE_THRESHOLD = 0.05; // 低於此值視為眼部偵測不可靠
+          const box = result.detection.box;
+          let usedFallback = false;
+
+          if (leftEye.aperture < APERTURE_THRESHOLD) {
+            leftEye = estimateEyeFromFaceBox(box, true);
+            usedFallback = true;
+          }
+          if (rightEye.aperture < APERTURE_THRESHOLD) {
+            rightEye = estimateEyeFromFaceBox(box, false);
+            usedFallback = true;
+          }
+
+          leftEye  = smooth(leftEye,  prevLeft);
           rightEye = smooth(rightEye, prevRight);
-          prevLeft = leftEye;
+          prevLeft  = leftEye;
           prevRight = rightEye;
 
-          onResult({ leftEye, rightEye, detected: true });
+          onResult({ leftEye, rightEye, detected: true, fallback: usedFallback });
         }
       } catch (e) {
         // Skip frame

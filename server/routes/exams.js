@@ -100,8 +100,9 @@ router.post('/generate', requireRole('ADMIN', 'TEACHER'), async (req, res) => {
     }
 
     const chunkTexts = chunks.map(c => c.content);
+    // 【PM 決策 #6】每次最多 5 題，避免 JSON 超過 maxOutputTokens 被截斷
     const questions = await generateQuestions(chunkTexts, {
-      count: Math.min(count, 20),
+      count: Math.min(count, 5),
       types: questionTypes,
       difficulty,
     });

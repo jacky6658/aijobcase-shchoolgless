@@ -1,26 +1,61 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
 import { UserRole } from '../types';
-import { 
-  IconGraduation, 
-  IconUser, 
-  IconZap, 
-  IconDatabase, 
-  IconBook, 
-  IconQuestion, 
-  IconChart, 
+import { getAuthHeaders } from '../services/authService';
+import {
+  IconGraduation,
+  IconUser,
+  IconZap,
+  IconDatabase,
+  IconBook,
+  IconQuestion,
+  IconChart,
   IconTarget,
   IconChat,
   IconInfo,
   IconDashboard,
   IconCheck
 } from './Icons';
+
+interface OverviewStats {
+  course_count: number;
+  student_count: number;
+  total_ai_requests: number;
+  material_count: number;
+}
+
+interface MyUsage {
+  month_total: number;
+  today_used: number;
+  today_limit: number;
+  today_remain: number;
+}
+
 interface DashboardProps {
   role: UserRole;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ role }) => {
+  const [overview, setOverview] = useState<OverviewStats | null>(null);
+  const [myUsage, setMyUsage] = useState<MyUsage | null>(null);
+
+  useEffect(() => {
+    // 管理員 / 教師：拿全系統統計
+    if (role === UserRole.ADMIN || role === UserRole.TEACHER) {
+      fetch('/api/stats/overview', { headers: getAuthHeaders() })
+        .then(r => r.json())
+        .then(d => { if (d.success) setOverview(d.data); })
+        .catch(() => {});
+    }
+    // 學生：拿個人用量
+    if (role === UserRole.STUDENT) {
+      fetch('/api/stats/my-usage', { headers: getAuthHeaders() })
+        .then(r => r.json())
+        .then(d => { if (d.success) setMyUsage(d.data); })
+        .catch(() => {});
+    }
+  }, [role]);
 
   const usageData = [
     { name: '週一', queries: 400, activeUsers: 120 },
@@ -42,10 +77,10 @@ const Dashboard: React.FC<DashboardProps> = ({ role }) => {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {[
-          { label: '總課程數', value: '--', Icon: IconGraduation, color: 'bg-blue-500' },
-          { label: '活躍學生數', value: '--', Icon: IconUser, color: 'bg-green-500' },
-          { label: 'AI 總請求', value: '--', Icon: IconZap, color: 'bg-purple-500' },
-          { label: '教材數量', value: '--', Icon: IconDatabase, color: 'bg-amber-500' },
+          { label: '總課程數',  value: overview ? String(overview.course_count)        : '--', Icon: IconGraduation, color: 'bg-blue-500' },
+          { label: '活躍學生數', value: overview ? String(overview.student_count)       : '--', Icon: IconUser,       color: 'bg-green-500' },
+          { label: 'AI 累計問答', value: overview ? String(overview.total_ai_requests) : '--', Icon: IconZap,        color: 'bg-purple-500' },
+          { label: '教材數量',  value: overview ? String(overview.material_count)       : '--', Icon: IconDatabase,   color: 'bg-amber-500' },
         ].map((stat, i) => (
           <div key={i} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <div className={`${stat.color} w-10 h-10 rounded-xl flex items-center justify-center text-white mb-4 shadow-lg`}>
@@ -188,16 +223,19 @@ const Dashboard: React.FC<DashboardProps> = ({ role }) => {
   const renderStudentStats = () => (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-indigo-600 to-violet-700 p-8 rounded-3xl text-white shadow-xl">
-        <h3 className="text-2xl font-bold">歡迎回來，陳同學！</h3>
-        <p className="text-indigo-100 mt-2">您本週透過 AI 教材助理節省了約 4 小時的檢索時間。</p>
+        <h3 className="text-2xl font-bold">歡迎回來！</h3>
+        <p className="text-indigo-100 mt-2">
+          今日剩餘提問額度：
+          <strong>{myUsage ? `${myUsage.today_remain} / ${myUsage.today_limit} 次` : '載入中…'}</strong>
+        </p>
         <div className="flex gap-4 mt-6">
           <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20">
             <p className="text-xs text-indigo-200 font-bold uppercase tracking-widest">本月發問</p>
-            <p className="text-2xl font-black mt-1">48</p>
+            <p className="text-2xl font-black mt-1">{myUsage ? myUsage.month_total : '--'}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/20">
-            <p className="text-xs text-indigo-200 font-bold uppercase tracking-widest">學習進度</p>
-            <p className="text-2xl font-black mt-1">72%</p>
+            <p className="text-xs text-indigo-200 font-bold uppercase tracking-widest">今日已用</p>
+            <p className="text-2xl font-black mt-1">{myUsage ? myUsage.today_used : '--'}</p>
           </div>
         </div>
       </div>

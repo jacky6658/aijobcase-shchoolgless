@@ -3,27 +3,19 @@
  */
 const { chatOnce } = require('./geminiService');
 
-const GENERATE_PROMPT = `你是一位專業的教育測驗出題者。請根據以下教材內容，生成考題。
+// 【PM 決策 #6】極簡 JSON prompt：壓縮欄位名，減少輸出 Token 消耗
+// 最終由 generateQuestions 解析後轉回完整欄位名
+const GENERATE_PROMPT = `你是護理考試出題專家。依教材生成考題，以繁體中文出題。
 
-要求：
-1. 題目必須基於提供的教材內容
-2. 每題必須包含：question_text, question_type, options (選擇題才需要), correct_answer, explanation, difficulty (1-5)
-3. 選擇題的 options 格式為 JSON 陣列 ["A. 答案", "B. 答案", "C. 答案", "D. 答案"]
-4. correct_answer 格式：選擇題填 "A"/"B"/"C"/"D"，是非題填 "TRUE"/"FALSE"
-5. explanation 要簡明解釋為何該答案正確
-6. 使用繁體中文
+嚴格規則：
+- 只輸出純 JSON 陣列，不加任何說明文字或 markdown
+- 每題格式（極簡）：{"q":"題目","t":"MULTIPLE_CHOICE","o":["A.選項","B.選項","C.選項","D.選項"],"a":"A","e":"解說(20字內)","d":3}
+- t 只能是 MULTIPLE_CHOICE 或 TRUE_FALSE
+- TRUE_FALSE 時 o 省略，a 填 TRUE 或 FALSE
+- d 為 1-5 的整數
 
-請以嚴格 JSON 陣列格式回覆，不要加任何其他文字：
-[
-  {
-    "question_text": "題目內容",
-    "question_type": "MULTIPLE_CHOICE",
-    "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-    "correct_answer": "B",
-    "explanation": "解釋",
-    "difficulty": 3
-  }
-]`;
+直接輸出 JSON 陣列，範例：
+[{"q":"...","t":"MULTIPLE_CHOICE","o":["A....","B....","C....","D...."],"a":"B","e":"...","d":3}]`;
 
 /**
  * 從教材 chunks 生成考題
@@ -41,26 +33,26 @@ ${materialText}
 
 請生成 ${count} 題，題型：${typeStr}，${diffStr}。`;
 
-  const response = await chatOnce(prompt, GENERATE_PROMPT);
+  // 【PM 決策 #6】出題需要更多 token 空間（5 題 JSON ≈ 600-700 tokens）
+  // 設為 800 作為安全上限，避免 JSON 被截斷導致解析失敗
+  const response = await chatOnce(prompt, GENERATE_PROMPT, 800);
 
-  // 解析 JSON
+  // 解析極簡 JSON 並轉回完整欄位名
   try {
-    // 嘗試提取 JSON 陣列
     const jsonMatch = response.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error('未找到 JSON 陣列');
 
-    const questions = JSON.parse(jsonMatch[0]);
+    const raw = JSON.parse(jsonMatch[0]);
 
-    // 驗證每題必要欄位
-    return questions
-      .filter(q => q.question_text && q.correct_answer && q.question_type)
+    return raw
+      .filter(q => q.q && q.a && q.t) // 驗證極簡欄位
       .map(q => ({
-        question_text: q.question_text,
-        question_type: q.question_type || 'MULTIPLE_CHOICE',
-        options: q.options || null,
-        correct_answer: q.correct_answer,
-        explanation: q.explanation || '',
-        difficulty: Math.max(1, Math.min(5, q.difficulty || 3)),
+        question_text:  q.q,
+        question_type:  q.t || 'MULTIPLE_CHOICE',
+        options:        q.o || null,
+        correct_answer: q.a,
+        explanation:    q.e || '',
+        difficulty:     Math.max(1, Math.min(5, q.d || 3)),
       }));
   } catch (err) {
     console.error('AI 出題 JSON 解析失敗:', err.message);

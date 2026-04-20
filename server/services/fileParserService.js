@@ -3,9 +3,10 @@
  */
 
 async function parsePDF(buffer) {
-  const pdfParse = require('pdf-parse');
-  const result = await pdfParse(buffer);
-  return { text: result.text, pageCount: result.numpages };
+  const { PDFParse } = require('pdf-parse');
+  const parser = new PDFParse({ data: buffer });
+  const result = await parser.getText();
+  return { text: result.text, pageCount: result.total ?? result.pages?.length ?? 0 };
 }
 
 async function parseDocx(buffer) {

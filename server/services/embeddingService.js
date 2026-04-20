@@ -10,7 +10,7 @@ if (!GEMINI_API_KEY) {
 }
 
 const genAI = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
-const EMBEDDING_MODEL = 'text-embedding-004';
+const EMBEDDING_MODEL = 'gemini-embedding-001';
 const EMBEDDING_DIMS = 768;
 const BATCH_SIZE = 50;
 
@@ -26,7 +26,11 @@ async function embedSingle(text) {
       contents: text,
       config: { outputDimensionality: EMBEDDING_DIMS },
     });
-    return result.embedding.values;
+    const emb = result.embedding?.values
+      ?? result.embeddings?.[0]?.values
+      ?? result.embeddings?.[0];
+    if (!emb) throw new Error('Embedding response missing values');
+    return emb;
   });
 }
 

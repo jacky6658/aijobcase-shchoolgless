@@ -97,6 +97,7 @@ app.use('/api/chat', require('./routes/chat'));
 app.use('/api/exams', require('./routes/exams'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/ar-practice', require('./routes/ar-practice'));
+app.use('/api/stats',      require('./routes/stats'));
 
 // ==================== Health Check ====================
 app.get('/api/health', async (req, res) => {

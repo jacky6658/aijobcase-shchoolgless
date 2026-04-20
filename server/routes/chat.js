@@ -9,7 +9,14 @@ const { search } = require('../services/vectorSearchService');
 
 const router = express.Router();
 
-const DAILY_QUESTION_LIMIT = 50;
+// ══════════════════════════════════════════
+// 【成本控管 #1】每日次數上限：30 次
+// 超過時直接擋在 Gemini 呼叫前，不消耗 Token
+// ══════════════════════════════════════════
+const DAILY_QUESTION_LIMIT = 30;
+
+// 【成本控管 #2】Sliding Window：只保留最近 N 則對話
+const HISTORY_WINDOW = 8;
 
 /**
  * POST /api/chat/stream
@@ -23,7 +30,7 @@ router.post('/stream', async (req, res) => {
   }
 
   try {
-    // 1. 檢查每日用量
+    // 1. 【成本控管 #1】檢查每日用量，先計數再呼叫 API
     const usageResult = await pool.query(
       `INSERT INTO daily_usage (user_id, usage_date, question_count)
        VALUES ($1, CURRENT_DATE, 1)
@@ -34,10 +41,16 @@ router.post('/stream', async (req, res) => {
     );
     const count = usageResult.rows[0].question_count;
     if (count > DAILY_QUESTION_LIMIT) {
+      // 超限：扣回剛才加的 1，避免計數持續膨脹
+      await pool.query(
+        `UPDATE daily_usage SET question_count = question_count - 1
+         WHERE user_id = $1 AND usage_date = CURRENT_DATE`,
+        [req.user.id]
+      );
       return res.status(429).json({
         success: false,
-        error: `今日提問次數已達上限 (${DAILY_QUESTION_LIMIT} 題)`,
-        data: { used: count, limit: DAILY_QUESTION_LIMIT },
+        error: '今日練習額度已滿，明天再加油',
+        data: { used: DAILY_QUESTION_LIMIT, limit: DAILY_QUESTION_LIMIT },
       });
     }
 
@@ -51,14 +64,26 @@ router.post('/stream', async (req, res) => {
       console.warn('向量搜尋失敗，將無教材上下文回答:', err.message);
     }
 
-    // 3. 設定 SSE headers
+    // 3. 【成本控管 #2】Sliding Window：從 DB 取最近 8 則，新對話自動頂替舊的
+    //    取 DESC 後 reverse 回正序，確保 Gemini history 時序正確
+    const { rows: historyRows } = await pool.query(
+      `SELECT role, content
+       FROM chat_messages
+       WHERE user_id = $1 AND course_id = $2
+       ORDER BY created_at DESC
+       LIMIT $3`,
+      [req.user.id, courseId, HISTORY_WINDOW]
+    );
+    const history = historyRows.reverse(); // 轉回時間正序
+
+    // 4. 設定 SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); // Nginx/Zeabur 禁止緩衝
     res.flushHeaders();
 
-    // 4. 送出來源資訊
+    // 5. 送出來源資訊
     const sourcesData = sources.map(s => ({
       content: s.content.slice(0, 200) + '...',
       metadata: s.metadata,
@@ -66,19 +91,19 @@ router.post('/stream', async (req, res) => {
     }));
     res.write(`data: ${JSON.stringify({ type: 'sources', data: sourcesData })}\n\n`);
 
-    // 5. 串流 Gemini 回覆
+    // 6. 串流 Gemini 回覆（傳入 history，啟動記憶體）
     let fullResponse = '';
-    const stream = chatStream(message, context);
+    const stream = chatStream(message, context, history);
     for await (const chunk of stream) {
       fullResponse += chunk;
       res.write(`data: ${JSON.stringify({ type: 'token', text: chunk })}\n\n`);
     }
 
-    // 6. 完成
+    // 7. 完成
     res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
     res.end();
 
-    // 7. 背景存聊天紀錄
+    // 8. 背景存聊天紀錄
     saveMessages(req.user.id, courseId, message, fullResponse, sourcesData)
       .catch(err => console.error('存聊天紀錄失敗:', err.message));
 
