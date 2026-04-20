@@ -129,6 +129,8 @@ router.post('/batch-create', requireAuth, requireRole('ADMIN', 'TEACHER'), async
           errors.push({ studentId: u.studentId, error: '缺少必要欄位' });
           continue;
         }
+        // SAVEPOINT 讓單筆錯誤不污染整筆交易（否則整批 COMMIT 會變 ROLLBACK）
+        await client.query('SAVEPOINT sp_user');
         try {
           const hash = await bcrypt.hash(u.password, 10);
           const role = u.role === 'TEACHER' && req.user.role === 'ADMIN' ? 'TEACHER' : 'STUDENT';
@@ -138,8 +140,10 @@ router.post('/batch-create', requireAuth, requireRole('ADMIN', 'TEACHER'), async
              RETURNING id, student_id, name, role`,
             [u.studentId, u.name, role, hash]
           );
+          await client.query('RELEASE SAVEPOINT sp_user');
           created.push(rows[0]);
         } catch (err) {
+          await client.query('ROLLBACK TO SAVEPOINT sp_user');
           if (err.code === '23505') {
             errors.push({ studentId: u.studentId, error: '學號已存在' });
           } else {

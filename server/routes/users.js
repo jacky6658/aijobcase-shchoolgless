@@ -48,7 +48,7 @@ router.get('/usage', async (req, res) => {
       data: {
         questionCount: usage.question_count,
         examCount: usage.exam_count,
-        questionLimit: 50,
+        questionLimit: 30,
         examLimit: 100,
       },
     });

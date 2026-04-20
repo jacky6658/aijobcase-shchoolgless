@@ -70,7 +70,7 @@ router.post('/stream', async (req, res) => {
       `SELECT role, content
        FROM chat_messages
        WHERE user_id = $1 AND course_id = $2
-       ORDER BY created_at DESC
+       ORDER BY created_at DESC, id DESC
        LIMIT $3`,
       [req.user.id, courseId, HISTORY_WINDOW]
     );
@@ -143,7 +143,7 @@ router.get('/history', async (req, res) => {
       `SELECT id, role, content, sources, mode, created_at
        FROM chat_messages
        WHERE user_id = $1 AND course_id = $2
-       ORDER BY created_at DESC LIMIT $3`,
+       ORDER BY created_at DESC, id DESC LIMIT $3`,
       [req.user.id, courseId, parseInt(limit)]
     );
 

@@ -94,8 +94,8 @@ router.get('/students', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT u.id, u.student_id, u.name,
-        COUNT(s.id) as total_sessions,
-        COUNT(CASE WHEN s.status = 'COMPLETED' THEN 1 END) as completed_sessions,
+        COUNT(s.id)::int as total_sessions,
+        COUNT(CASE WHEN s.status = 'COMPLETED' THEN 1 END)::int as completed_sessions,
         MAX(s.created_at) as last_practice,
         COALESCE(AVG(s.duration_seconds), 0)::int as avg_duration
       FROM users u

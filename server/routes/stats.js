@@ -15,10 +15,10 @@ router.get('/overview', async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT
-        (SELECT COUNT(*)  FROM courses  WHERE status = 'ACTIVE')                       AS course_count,
-        (SELECT COUNT(*)  FROM users    WHERE role = 'STUDENT' AND status = 'ACTIVE')  AS student_count,
-        (SELECT COALESCE(SUM(question_count), 0) FROM daily_usage)                     AS total_ai_requests,
-        (SELECT COUNT(*)  FROM materials WHERE status = 'READY')                       AS material_count
+        (SELECT COUNT(*)::int  FROM courses  WHERE status = 'ACTIVE')                       AS course_count,
+        (SELECT COUNT(*)::int  FROM users    WHERE role = 'STUDENT' AND status = 'ACTIVE')  AS student_count,
+        (SELECT COALESCE(SUM(question_count), 0)::int FROM daily_usage)                     AS total_ai_requests,
+        (SELECT COUNT(*)::int  FROM materials WHERE status = 'READY')                       AS material_count
     `);
     res.json({ success: true, data: rows[0] });
   } catch (err) {
