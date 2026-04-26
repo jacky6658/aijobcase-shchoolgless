@@ -24,6 +24,8 @@
 - [x] 練習紀錄查看（彈窗顯示歷史紀錄）
 - [x] 全螢幕模式
 - [x] 每日使用次數限制（30 次 / 天，超限回覆親切提示）
+- [x] **臉型眼鏡推薦**（圓臉/方臉/長臉/心型臉/鵝蛋臉 → 推薦框型 + 搭配說明）
+- [x] **左右擺頭透視效果**（AR 試戴時轉頭可看鏡框側面視角，模擬照鏡子體驗）
 
 #### 教師／管理端
 - [x] 課程管理（CRUD + 學生選課）
@@ -33,6 +35,7 @@
 - [x] AR 練習報表（查看學生練習次數、詳細紀錄）
 - [x] 用戶管理（批次建帳）
 - [x] Dashboard 真實數據（總課程數、活躍學生、AI 累計問答、教材數量）
+- [x] **眼鏡素材管理**（後台匯入眼鏡/隱眼圖片，最多 30+ 種，標記框型/材質/風格/適合臉型）
 
 #### 系統技術
 - [x] JWT 認證系統
@@ -101,14 +104,18 @@ aijobcase-shchoolgless/
 │   │   ├── MaterialManagement.tsx # 教材管理
 │   │   ├── AIChatView.tsx   # AI 課業問答
 │   │   ├── LoginView.tsx    # 登入頁面
-│   │   └── Sidebar.tsx      # 側邊導航
+│   │   ├── Sidebar.tsx      # 側邊導航
+│   │   ├── GlassesManagement.tsx    # 眼鏡/隱眼素材後台管理
+│   │   └── FaceShapeRecommendation.tsx  # 臉型推薦 UI（含臉型選擇按鈕）
 │   ├── services/            # API 服務封裝
 │   └── ar/                  # AR 模擬獨立頁面
 │       ├── index.html       # AR 頁面入口
 │       ├── ar-main.ts       # AR 主程式（模組協調）
 │       ├── modules/
 │       │   ├── face-detector.ts       # face-api.js 臉部偵測 + 口罩補償
-│       │   ├── lens-renderer.ts       # Canvas 2D 隱眼/眼鏡渲染
+│       │   ├── lens-renderer.ts       # Canvas 2D 隱眼/眼鏡渲染（含 yaw 透視效果）
+│       │   ├── face-shape-analyzer.ts # 臉型分類 + 左右偏轉角（yaw）計算
+│       │   ├── recommendation-engine.ts # Rule-based 臉型推薦引擎
 │       │   ├── glasses-assets.ts      # 眼鏡 PNG 載入
 │       │   ├── guidance-controller.ts # 6 步驟操作引導 FSM
 │       │   ├── session-recorder.ts    # 練習紀錄 API
@@ -123,6 +130,7 @@ aijobcase-shchoolgless/
 │   │   ├── chat.js          # AI 聊天 SSE + RAG + Rate Limit + Sliding Window
 │   │   ├── exams.js         # 出題（上限 5 題）、答題、批改
 │   │   ├── ar-practice.js   # AR 練習紀錄 + 教師報表
+│   │   ├── glasses.js       # 眼鏡目錄 CRUD + 圖片上傳 + 臉型推薦 API
 │   │   ├── stats.js         # Dashboard 統計 API
 │   │   └── users.js         # 用戶管理
 │   ├── services/
@@ -137,6 +145,7 @@ aijobcase-shchoolgless/
 │   └── db/
 │       ├── init-postgres.sql      # 主資料表 Schema
 │       └── migration-ar.sql       # AR 練習紀錄資料表
+│       └── migration-glasses.sql  # 眼鏡目錄 + 推薦紀錄資料表
 └── package.json             # Root: concurrently 啟動前後端
 ```
 
@@ -162,6 +171,7 @@ npm run install:all
 ```bash
 npm run init-db
 psql -U <user> -d edumind -f server/db/migration-ar.sql
+psql -U <user> -d edumind -f server/db/migration-glasses.sql
 ```
 
 ### 4. 啟動開發伺服器
@@ -206,6 +216,10 @@ npm run dev
 | `/api/exams/attempt` | POST | 答題 + AI 批改 |
 | `/api/ar-practice/sessions` | POST/GET | 建立/查看練習紀錄 |
 | `/api/ar-practice/students` | GET | 教師查看學生練習報表 |
+| `/api/glasses/upload` | POST | 上傳眼鏡/隱眼圖片 + metadata（Admin/Teacher）|
+| `/api/glasses` | GET | 取得眼鏡目錄列表 |
+| `/api/glasses/recommend` | GET | 依臉型推薦眼鏡（`?face_shape=round`）|
+| `/api/glasses/:id` | PATCH/DELETE | 更新/刪除眼鏡品項 |
 | `/api/stats/overview` | GET | 系統總覽統計（管理員/教師）|
 | `/api/stats/my-usage` | GET | 個人用量查詢（學生）|
 
