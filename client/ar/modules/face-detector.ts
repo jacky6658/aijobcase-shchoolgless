@@ -15,14 +15,15 @@ export interface EyeData {
 export interface FaceResult {
   leftEye: EyeData;
   rightEye: EyeData;
+  noseBridge?: { x: number; y: number };
+  yaw: number;        // -1(左轉) ~ 0(正面) ~ +1(右轉)，raw camera space
   detected: boolean;
-  // 是否使用補償定位（口罩/低光源場景）
   fallback?: boolean;
 }
 
 type OnResultCallback = (result: FaceResult) => void;
 
-const SMOOTH_FACTOR = 0.35;
+const SMOOTH_FACTOR = 0.7; // 提高響應速度，減少飄浮感
 let prevLeft: EyeData | null = null;
 let prevRight: EyeData | null = null;
 
@@ -164,7 +165,7 @@ export async function initFaceDetector(
         if (!result) {
           prevLeft = null;
           prevRight = null;
-          onResult({ leftEye: null as any, rightEye: null as any, detected: false });
+          onResult({ leftEye: null as any, rightEye: null as any, yaw: 0, detected: false });
         } else {
           const points = result.landmarks.positions;
 
@@ -191,7 +192,23 @@ export async function initFaceDetector(
           prevLeft  = leftEye;
           prevRight = rightEye;
 
-          onResult({ leftEye, rightEye, detected: true, fallback: usedFallback });
+          // 鼻樑頂點（用於眼鏡垂直錨定）
+          const nosePt = points[27];
+          const noseBridge = nosePt ? { x: nosePt.x, y: nosePt.y } : undefined;
+
+          // 頭部左右偏轉 yaw：用左右臉邊界 + 鼻尖估算
+          // points[0]=左臉邊, points[16]=右臉邊, points[30]=鼻尖
+          const leftBound  = points[0];
+          const rightBound = points[16];
+          const noseTip    = points[30];
+          let yaw = 0;
+          if (leftBound && rightBound && noseTip) {
+            const faceCenter = (leftBound.x + rightBound.x) / 2;
+            const halfWidth  = Math.abs(rightBound.x - leftBound.x) / 2;
+            yaw = halfWidth > 0 ? (noseTip.x - faceCenter) / halfWidth : 0;
+          }
+
+          onResult({ leftEye, rightEye, noseBridge, yaw, detected: true, fallback: usedFallback });
         }
       } catch (e) {
         // Skip frame

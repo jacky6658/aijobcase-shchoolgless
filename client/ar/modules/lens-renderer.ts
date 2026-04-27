@@ -4,7 +4,9 @@
  */
 
 import type { EyeData } from './face-detector';
-import { GLASSES_IMAGES } from './glasses-assets';
+import { getGlassesSet } from './glasses-assets';
+
+const YAW_THRESHOLD = 0.18; // 超過此值判定為側臉
 
 export type LensColor = 'clear' | 'blue' | 'green' | 'brown' | 'grey';
 export type RenderMode = 'contact' | 'glasses';
@@ -28,8 +30,6 @@ export class LensRenderer {
   private glassesStyle = 'black';
   private glassesScale = DEFAULT_GLASSES_SCALE;
   private lensScale = LENS_SIZE_MULTIPLIER;
-  private yaw = 0;           // -1.0 ~ 1.0，由外部每幀更新
-  private glassesImg: HTMLImageElement | null = null; // 動態載入的圖片（後台匯入）
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -44,10 +44,6 @@ export class LensRenderer {
   setLensScale(scale: number) { this.lensScale = scale; }
   getGlassesScale() { return this.glassesScale; }
   getLensScale() { return this.lensScale; }
-  setYaw(yaw: number) { this.yaw = yaw; }
-
-  /** 設定動態圖片（後台匯入的眼鏡/隱眼），傳 null 則回用預設 */
-  setDynamicImage(img: HTMLImageElement | null) { this.glassesImg = img; }
 
   resize(width: number, height: number) {
     this.canvas.width = width;
@@ -99,62 +95,64 @@ export class LensRenderer {
     ctx.restore();
   }
 
-  private renderGlasses(leftEye: EyeData, rightEye: EyeData) {
+  private renderGlasses(leftEye: EyeData, rightEye: EyeData, noseBridge?: { x: number; y: number }, yaw = 0) {
     const ctx = this.ctx;
-    // 優先用動態圖（後台匯入），其次用靜態預設
-    const img = this.glassesImg ?? GLASSES_IMAGES[this.glassesStyle] ?? GLASSES_IMAGES.black;
+    const set = getGlassesSet(this.glassesStyle);
 
-    if (!img.complete || !img.naturalWidth) return;
+    // 依 yaw 選角度：canvas 是 scaleX(-1) mirrored，yaw > 0 → 畫面右轉 → 顯示右側圖
+    let img: HTMLImageElement;
+    if (yaw > YAW_THRESHOLD)       img = set.sideRight;
+    else if (yaw < -YAW_THRESHOLD) img = set.sideLeft;
+    else                           img = set.front;
 
+    if (!img.complete || !img.naturalWidth) return; // image not loaded yet
+
+    // Calculate position and size from eye positions
     const centerX = (leftEye.irisCenter.x + rightEye.irisCenter.x) / 2;
-    const centerY = (leftEye.irisCenter.y + rightEye.irisCenter.y) / 2;
+    const eyeMidY = (leftEye.irisCenter.y + rightEye.irisCenter.y) / 2;
     const eyeDistance = Math.abs(rightEye.irisCenter.x - leftEye.irisCenter.x);
+
+    // 用鼻樑錨定 Y：眼中線與鼻樑頂點的中間，讓鏡框真實壓在臉上
+    // 無鼻樑資料時退回眼中線 + 少量偏移
+    const centerY = noseBridge
+      ? (eyeMidY + noseBridge.y) / 2
+      : eyeMidY + eyeDistance * 0.08;
+
+    // Glasses image width scaled by eye distance
     const glassesWidth = eyeDistance * this.glassesScale;
     const aspectRatio = img.naturalHeight / img.naturalWidth;
     const glassesHeight = glassesWidth * aspectRatio;
 
-    const tiltAngle = Math.atan2(
+    // Calculate rotation angle from eye tilt
+    const angle = Math.atan2(
       rightEye.irisCenter.y - leftEye.irisCenter.y,
       rightEye.irisCenter.x - leftEye.irisCenter.x
     );
 
     ctx.save();
+
+    // Translate to center, rotate, then draw
     ctx.translate(centerX, centerY);
-    ctx.rotate(tiltAngle);
+    ctx.rotate(angle);
 
-    // ── 左右擺頭透視效果 ──────────────────────────────
-    // yaw: -1(左轉最大) ~ 0(正面) ~ 1(右轉最大)
-    // 用水平 shear + 非均勻縮放模擬透視壓縮
-    const yaw = Math.max(-0.7, Math.min(0.7, this.yaw));
+    // Draw glasses image centered
+    ctx.drawImage(
+      img,
+      -glassesWidth / 2,
+      -glassesHeight / 2,
+      glassesWidth,
+      glassesHeight
+    );
 
-    if (Math.abs(yaw) > 0.03) {
-      // xScale: 正面=1.0，側轉時因透視顯得較窄
-      const xScale = 1 - Math.abs(yaw) * 0.25;
-      // shear: 讓眼鏡隨頭部旋轉傾斜（平行四邊形效果）
-      const shear = yaw * 0.18;
-
-      // transform(a, b, c, d, e, f) = [a c] [b d] 矩陣
-      // 結合 xScale 和水平 shear
-      ctx.transform(xScale, 0, shear, 1, 0, 0);
-
-      // 右轉時陰影在左側，左轉時在右側（增加立體感）
-      const shadowX = yaw * glassesWidth * 0.06;
-      ctx.shadowColor = 'rgba(0,0,0,0.25)';
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetX = shadowX;
-      ctx.shadowOffsetY = 2;
-    }
-
-    ctx.drawImage(img, -glassesWidth / 2, -glassesHeight / 2, glassesWidth, glassesHeight);
     ctx.restore();
   }
 
-  render(leftEye: EyeData | null, rightEye: EyeData | null) {
+  render(leftEye: EyeData | null, rightEye: EyeData | null, noseBridge?: { x: number; y: number }, yaw = 0) {
     this.clear();
     if (!leftEye || !rightEye) return;
 
     if (this.mode === 'glasses') {
-      this.renderGlasses(leftEye, rightEye);
+      this.renderGlasses(leftEye, rightEye, noseBridge, yaw);
     } else {
       this.renderContactLens(leftEye);
       this.renderContactLens(rightEye);

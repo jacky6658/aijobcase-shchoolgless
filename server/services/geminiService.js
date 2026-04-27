@@ -6,7 +6,7 @@ const { geminiLimit } = require('./geminiLimiter');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const genAI = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
-const CHAT_MODEL = 'gemini-2.0-flash-lite'; // 使用 Lite 版降低 Token 成本
+const CHAT_MODEL = 'gemini-2.5-flash-lite'; // 最便宜穩定版，適合高併發
 
 // ══════════════════════════════════════════
 // 【成本控管 #3】輸出熔斷：System Instruction 明確要求回覆精簡
