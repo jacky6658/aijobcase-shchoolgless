@@ -88,7 +88,7 @@ router.post('/upload', requireRole('ADMIN', 'TEACHER'), (req, res) => {
 
 // ── 取得列表 ───────────────────────────────────────
 
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { item_type, is_active = 'true' } = req.query;
     const params = [];

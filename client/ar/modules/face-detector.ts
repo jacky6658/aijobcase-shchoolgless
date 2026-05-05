@@ -1,9 +1,9 @@
 /**
- * face-detector.ts - Face detection using face-api.js
- * No WebGL required - works on CPU via TensorFlow.js
+ * face-detector.ts - Face detection using MediaPipe FaceLandmarker
+ * 478 landmarks (468 face + 10 iris), GPU-accelerated, 30fps
  */
 
-import * as faceapi from 'face-api.js';
+import { FaceLandmarker, FilesetResolver, type NormalizedLandmark } from '@mediapipe/tasks-vision';
 
 export interface EyeData {
   irisCenter: { x: number; y: number };
@@ -16,30 +16,63 @@ export interface FaceResult {
   leftEye: EyeData;
   rightEye: EyeData;
   noseBridge?: { x: number; y: number };
-  yaw: number;        // -1(左轉) ~ 0(正面) ~ +1(右轉)，raw camera space
+  yaw: number;        // -1(左轉) ~ 0(正面) ~ +1(右轉)（landmark 估算）
+  // 從 MediaPipe facialTransformationMatrix 抽出的真實 3D 角度（弧度）
+  pose?: { yaw: number; pitch: number; roll: number };
   detected: boolean;
   fallback?: boolean;
 }
 
 type OnResultCallback = (result: FaceResult) => void;
 
-const SMOOTH_FACTOR = 0.7; // 提高響應速度，減少飄浮感
+// MediaPipe landmark indices
+const MP = {
+  LEFT_IRIS_CENTER:  468,
+  LEFT_IRIS_RING:    [469, 470, 471, 472],
+  RIGHT_IRIS_CENTER: 473,
+  RIGHT_IRIS_RING:   [474, 475, 476, 477],
+  // Eye outline for contour/aperture
+  LEFT_EYE_OUTER:    33,
+  LEFT_EYE_INNER:    133,
+  LEFT_EYE_TOP:      159,
+  LEFT_EYE_BOTTOM:   145,
+  LEFT_EYE_TOP2:     158,
+  LEFT_EYE_BOT2:     153,
+  RIGHT_EYE_OUTER:   263,
+  RIGHT_EYE_INNER:   362,
+  RIGHT_EYE_TOP:     386,
+  RIGHT_EYE_BOTTOM:  374,
+  RIGHT_EYE_TOP2:    385,
+  RIGHT_EYE_BOT2:    380,
+  // Nose
+  NOSE_BRIDGE:       6,
+  NOSE_TIP:          4,
+  // Cheeks for yaw
+  LEFT_CHEEK:        234,
+  RIGHT_CHEEK:       454,
+};
+
+const WASM_URL  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm';
+const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+
+const SMOOTH_FACTOR = 0.4;  // 降低敏感度，減少跳動／擺動
 let prevLeft: EyeData | null = null;
 let prevRight: EyeData | null = null;
 
 function smooth(current: EyeData, prev: EyeData | null): EyeData {
   if (!prev) return current;
+  const lerp = (a: number, b: number) => a + SMOOTH_FACTOR * (b - a);
   return {
     irisCenter: {
-      x: prev.irisCenter.x + SMOOTH_FACTOR * (current.irisCenter.x - prev.irisCenter.x),
-      y: prev.irisCenter.y + SMOOTH_FACTOR * (current.irisCenter.y - prev.irisCenter.y),
+      x: lerp(prev.irisCenter.x, current.irisCenter.x),
+      y: lerp(prev.irisCenter.y, current.irisCenter.y),
     },
-    irisRadius: prev.irisRadius + SMOOTH_FACTOR * (current.irisRadius - prev.irisRadius),
+    irisRadius: lerp(prev.irisRadius, current.irisRadius),
     contour: current.contour.map((pt, i) => ({
-      x: (prev.contour[i]?.x ?? pt.x) + SMOOTH_FACTOR * (pt.x - (prev.contour[i]?.x ?? pt.x)),
-      y: (prev.contour[i]?.y ?? pt.y) + SMOOTH_FACTOR * (pt.y - (prev.contour[i]?.y ?? pt.y)),
+      x: lerp(prev.contour[i]?.x ?? pt.x, pt.x),
+      y: lerp(prev.contour[i]?.y ?? pt.y, pt.y),
     })),
-    aperture: prev.aperture + SMOOTH_FACTOR * (current.aperture - prev.aperture),
+    aperture: lerp(prev.aperture, current.aperture),
   };
 }
 
@@ -47,87 +80,82 @@ function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
   return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
 }
 
-/**
- * 【PM 決策 #9】口罩／低光補償：從臉部 bounding box 估算眼睛位置
- * 標準臉部比例：
- *   - 眼睛 Y ≈ 臉部頂端往下 33%
- *   - 左眼 X ≈ 臉部左側往右 28%，右眼 X ≈ 72%
- *   - 虹膜半徑 ≈ 臉寬的 8%
- */
-function estimateEyeFromFaceBox(
-  box: { x: number; y: number; width: number; height: number },
-  isLeft: boolean
-): EyeData {
-  const eyeY  = box.y + box.height * 0.33;
-  const eyeX  = isLeft
-    ? box.x + box.width * 0.28
-    : box.x + box.width * 0.72;
-  const radius = box.width * 0.08;
-
-  // 產生 6 個假輪廓點（橢圓近似），讓 smooth() 有東西可以插值
-  const contour = Array.from({ length: 6 }, (_, i) => {
-    const angle = (i / 6) * Math.PI * 2;
-    return { x: eyeX + Math.cos(angle) * radius, y: eyeY + Math.sin(angle) * radius * 0.4 };
-  });
-
-  return {
-    irisCenter: { x: eyeX, y: eyeY },
-    irisRadius: radius,
-    contour,
-    aperture: 0.3, // 預設半睜眼狀態
-  };
+function denorm(lm: NormalizedLandmark, w: number, h: number) {
+  return { x: lm.x * w, y: lm.y * h };
 }
 
-function extractEyeFromLandmarks(points: faceapi.Point[], isLeft: boolean): EyeData {
-  // face-api.js 68-point landmarks:
-  // Left eye: points 36-41
-  // Right eye: points 42-47
-  const eyeStart = isLeft ? 36 : 42;
-  const eyeEnd = isLeft ? 41 : 47;
+/**
+ * 從 4x4 column-major 矩陣抽出 YXZ Euler 角度
+ * 注意：CSS3D 透過 scaleX(-1) 父層鏡像時，rotateY 與 rotateZ 的視覺方向會反轉
+ *       所以這裡輸出 RAW 角度，由消費端決定是否補償鏡像
+ */
+function extractEulerYXZ(m: number[]): { yaw: number; pitch: number; roll: number } {
+  // column-major: m[col*4 + row]
+  const m02 = m[8],  m12 = m[9],  m22 = m[10];
+  const m10 = m[1],  m11 = m[5];
+  const pitch = Math.asin(-Math.max(-1, Math.min(1, m12)));
+  const yaw   = Math.atan2(m02, m22);
+  const roll  = Math.atan2(m10, m11);
+  return { yaw, pitch, roll };
+}
 
-  const eyePoints: { x: number; y: number }[] = [];
-  let cx = 0, cy = 0;
-  for (let i = eyeStart; i <= eyeEnd; i++) {
-    const pt = { x: points[i].x, y: points[i].y };
-    eyePoints.push(pt);
-    cx += pt.x;
-    cy += pt.y;
-  }
-  cx /= eyePoints.length;
-  cy /= eyePoints.length;
+function extractEye(
+  lms: NormalizedLandmark[],
+  w: number,
+  h: number,
+  isLeft: boolean,
+): EyeData {
+  const irCenterIdx = isLeft ? MP.LEFT_IRIS_CENTER : MP.RIGHT_IRIS_CENTER;
+  const irRingIdx   = isLeft ? MP.LEFT_IRIS_RING   : MP.RIGHT_IRIS_RING;
 
-  // Eye width and height for radius and aperture
-  const outerPt = eyePoints[0]; // outer corner
-  const innerPt = eyePoints[3]; // inner corner
-  const topPt = eyePoints[1].y < eyePoints[2].y ? eyePoints[1] : eyePoints[2];
-  const bottomPt = eyePoints[4].y > eyePoints[5].y ? eyePoints[4] : eyePoints[5];
+  const center    = denorm(lms[irCenterIdx], w, h);
+  const ringPts   = irRingIdx.map(i => denorm(lms[i], w, h));
+  const irisRadius = ringPts.reduce((sum, p) => sum + dist(center, p), 0) / ringPts.length;
 
-  const eyeWidth = dist(outerPt, innerPt);
-  const eyeHeight = dist(topPt, bottomPt);
-  const irisRadius = eyeWidth * 0.18;
-  const aperture = eyeWidth > 0 ? eyeHeight / eyeWidth : 0;
+  const outerIdx  = isLeft ? MP.LEFT_EYE_OUTER   : MP.RIGHT_EYE_OUTER;
+  const innerIdx  = isLeft ? MP.LEFT_EYE_INNER    : MP.RIGHT_EYE_INNER;
+  const topIdx    = isLeft ? MP.LEFT_EYE_TOP      : MP.RIGHT_EYE_TOP;
+  const botIdx    = isLeft ? MP.LEFT_EYE_BOTTOM   : MP.RIGHT_EYE_BOTTOM;
+  const top2Idx   = isLeft ? MP.LEFT_EYE_TOP2     : MP.RIGHT_EYE_TOP2;
+  const bot2Idx   = isLeft ? MP.LEFT_EYE_BOT2     : MP.RIGHT_EYE_BOT2;
 
-  return {
-    irisCenter: { x: cx, y: cy },
-    irisRadius,
-    contour: eyePoints,
-    aperture,
-  };
+  const outerPt = denorm(lms[outerIdx], w, h);
+  const innerPt = denorm(lms[innerIdx], w, h);
+  const topPt   = denorm(lms[topIdx],   w, h);
+  const botPt   = denorm(lms[botIdx],   w, h);
+  const top2Pt  = denorm(lms[top2Idx],  w, h);
+  const bot2Pt  = denorm(lms[bot2Idx],  w, h);
+
+  const eyeWidth  = dist(outerPt, innerPt);
+  const eyeHeight = Math.max(dist(topPt, botPt), dist(top2Pt, bot2Pt));
+  const aperture  = eyeWidth > 0 ? eyeHeight / eyeWidth : 0.3;
+
+  const contour = [outerPt, topPt, top2Pt, innerPt, bot2Pt, botPt];
+
+  return { irisCenter: center, irisRadius, contour, aperture };
 }
 
 export async function initFaceDetector(
   videoElement: HTMLVideoElement,
   onResult: OnResultCallback,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
 ): Promise<void> {
-  onProgress(20);
+  onProgress(10);
 
-  // Load models from CDN
-  const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model';
+  // Load MediaPipe WASM + model
+  const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+  onProgress(40);
 
-  await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-  onProgress(50);
-  await faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL);
+  const landmarker = await FaceLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: MODEL_URL,
+      delegate: 'GPU',
+    },
+    runningMode: 'VIDEO',
+    numFaces: 1,
+    outputFaceBlendshapes: false,
+    outputFacialTransformationMatrixes: true, // 取 3D 頭部姿態
+  });
   onProgress(70);
 
   // Start camera
@@ -136,84 +164,58 @@ export async function initFaceDetector(
   });
   videoElement.srcObject = stream;
   await videoElement.play();
-
   onProgress(100);
 
-  // Detection options
-  const options = new faceapi.TinyFaceDetectorOptions({
-    inputSize: 224,
-    scoreThreshold: 0.3,
-  });
+  const INTERVAL = 33; // ~30fps cap
+  let lastTs = 0;
 
-  // Detection loop
-  const DETECT_INTERVAL = 120; // ms (~8 FPS)
-  let lastDetectTime = 0;
-  let detecting = false;
-
-  async function detect() {
+  function detect() {
     const now = performance.now();
-
-    if (!videoElement.paused && !videoElement.ended && !detecting && (now - lastDetectTime) > DETECT_INTERVAL) {
-      detecting = true;
-      lastDetectTime = now;
+    if (!videoElement.paused && !videoElement.ended && videoElement.readyState >= 2 && (now - lastTs) >= INTERVAL) {
+      lastTs = now;
+      const w = videoElement.videoWidth;
+      const h = videoElement.videoHeight;
 
       try {
-        const result = await faceapi
-          .detectSingleFace(videoElement, options)
-          .withFaceLandmarks(true); // true = use tiny model
-
-        if (!result) {
+        const results = landmarker.detectForVideo(videoElement, now);
+        if (!results.faceLandmarks.length) {
           prevLeft = null;
           prevRight = null;
           onResult({ leftEye: null as any, rightEye: null as any, yaw: 0, detected: false });
         } else {
-          const points = result.landmarks.positions;
+          const lms = results.faceLandmarks[0];
 
-          let leftEye  = extractEyeFromLandmarks(points, true);
-          let rightEye = extractEyeFromLandmarks(points, false);
-
-          // 【PM 決策 #9】口罩補償：若眼部 aperture 過低（眼睛被遮擋）
-          // 改用臉部 bounding box 估算位置，避免定位漂移
-          const APERTURE_THRESHOLD = 0.05; // 低於此值視為眼部偵測不可靠
-          const box = result.detection.box;
-          let usedFallback = false;
-
-          if (leftEye.aperture < APERTURE_THRESHOLD) {
-            leftEye = estimateEyeFromFaceBox(box, true);
-            usedFallback = true;
-          }
-          if (rightEye.aperture < APERTURE_THRESHOLD) {
-            rightEye = estimateEyeFromFaceBox(box, false);
-            usedFallback = true;
-          }
+          let leftEye  = extractEye(lms, w, h, true);
+          let rightEye = extractEye(lms, w, h, false);
 
           leftEye  = smooth(leftEye,  prevLeft);
           rightEye = smooth(rightEye, prevRight);
           prevLeft  = leftEye;
           prevRight = rightEye;
 
-          // 鼻樑頂點（用於眼鏡垂直錨定）
-          const nosePt = points[27];
-          const noseBridge = nosePt ? { x: nosePt.x, y: nosePt.y } : undefined;
+          const nb        = denorm(lms[MP.NOSE_BRIDGE], w, h);
+          const noseBridge = { x: nb.x, y: nb.y };
 
-          // 頭部左右偏轉 yaw：用左右臉邊界 + 鼻尖估算
-          // points[0]=左臉邊, points[16]=右臉邊, points[30]=鼻尖
-          const leftBound  = points[0];
-          const rightBound = points[16];
-          const noseTip    = points[30];
-          let yaw = 0;
-          if (leftBound && rightBound && noseTip) {
-            const faceCenter = (leftBound.x + rightBound.x) / 2;
-            const halfWidth  = Math.abs(rightBound.x - leftBound.x) / 2;
-            yaw = halfWidth > 0 ? (noseTip.x - faceCenter) / halfWidth : 0;
+          // Yaw from cheek landmarks + nose tip
+          const leftCheek  = denorm(lms[MP.LEFT_CHEEK],  w, h);
+          const rightCheek = denorm(lms[MP.RIGHT_CHEEK], w, h);
+          const noseTip    = denorm(lms[MP.NOSE_TIP],    w, h);
+          const faceCenter = (leftCheek.x + rightCheek.x) / 2;
+          const halfWidth  = Math.abs(rightCheek.x - leftCheek.x) / 2;
+          const yaw        = halfWidth > 0 ? (noseTip.x - faceCenter) / halfWidth : 0;
+
+          // 抽 3D 頭部姿態（若有 transformation matrix）
+          let pose: { yaw: number; pitch: number; roll: number } | undefined;
+          const mat = results.facialTransformationMatrixes?.[0];
+          if (mat?.data && mat.data.length >= 16) {
+            pose = extractEulerYXZ(Array.from(mat.data));
           }
 
-          onResult({ leftEye, rightEye, noseBridge, yaw, detected: true, fallback: usedFallback });
+          onResult({ leftEye, rightEye, noseBridge, yaw, pose, detected: true });
         }
-      } catch (e) {
-        // Skip frame
+      } catch {
+        // skip frame
       }
-      detecting = false;
     }
     requestAnimationFrame(detect);
   }

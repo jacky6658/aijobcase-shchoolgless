@@ -6,7 +6,6 @@
 import type { EyeData } from './face-detector';
 import { getGlassesSet } from './glasses-assets';
 
-const YAW_THRESHOLD = 0.18; // 超過此值判定為側臉
 
 export type LensColor = 'clear' | 'blue' | 'green' | 'brown' | 'grey';
 export type RenderMode = 'contact' | 'glasses';
@@ -20,7 +19,15 @@ const LENS_COLORS: Record<LensColor, { inner: string; outer: string; opacity: nu
 };
 
 const LENS_SIZE_MULTIPLIER = 1.8;
-const DEFAULT_GLASSES_SCALE = 2.8;
+// 鏡片中心在圖片中佔 ~50% 寬度，要讓鏡片中心對齊瞳孔，需 1/0.5 ≈ 2.0
+const DEFAULT_GLASSES_SCALE = 2.0;
+
+const FRONT_IMG_LENS_Y = 0.50;
+const YAW_THRESHOLD   = 0.5;
+const SIDE_LENS_X_RATIO = 0.10;
+const SIDE_SCALE        = 1.2;
+// 側面圖內鏡片寬度佔比（≈10%），用此換算鏡片實際寬以對齊眼睛
+const SIDE_LENS_W_RATIO = 0.20;
 
 export class LensRenderer {
   private canvas: HTMLCanvasElement;
@@ -99,49 +106,32 @@ export class LensRenderer {
     const ctx = this.ctx;
     const set = getGlassesSet(this.glassesStyle);
 
-    // 依 yaw 選角度：canvas 是 scaleX(-1) mirrored，yaw > 0 → 畫面右轉 → 顯示右側圖
-    let img: HTMLImageElement;
-    if (yaw > YAW_THRESHOLD)       img = set.sideRight;
-    else if (yaw < -YAW_THRESHOLD) img = set.sideLeft;
-    else                           img = set.front;
-
-    if (!img.complete || !img.naturalWidth) return; // image not loaded yet
-
-    // Calculate position and size from eye positions
-    const centerX = (leftEye.irisCenter.x + rightEye.irisCenter.x) / 2;
-    const eyeMidY = (leftEye.irisCenter.y + rightEye.irisCenter.y) / 2;
+    const eyeMidX     = (leftEye.irisCenter.x + rightEye.irisCenter.x) / 2;
+    const eyeMidY     = (leftEye.irisCenter.y + rightEye.irisCenter.y) / 2;
     const eyeDistance = Math.abs(rightEye.irisCenter.x - leftEye.irisCenter.x);
-
-    // 用鼻樑錨定 Y：眼中線與鼻樑頂點的中間，讓鏡框真實壓在臉上
-    // 無鼻樑資料時退回眼中線 + 少量偏移
-    const centerY = noseBridge
-      ? (eyeMidY + noseBridge.y) / 2
-      : eyeMidY + eyeDistance * 0.08;
-
-    // Glasses image width scaled by eye distance
-    const glassesWidth = eyeDistance * this.glassesScale;
-    const aspectRatio = img.naturalHeight / img.naturalWidth;
-    const glassesHeight = glassesWidth * aspectRatio;
-
-    // Calculate rotation angle from eye tilt
-    const angle = Math.atan2(
+    const tiltAngle   = Math.atan2(
       rightEye.irisCenter.y - leftEye.irisCenter.y,
-      rightEye.irisCenter.x - leftEye.irisCenter.x
-    );
+      rightEye.irisCenter.x - leftEye.irisCenter.x,
+    ) * 0.5;
 
     ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
 
-    // Translate to center, rotate, then draw
-    ctx.translate(centerX, centerY);
-    ctx.rotate(angle);
+    // 一律用正面圖。eyeDistance 已內含透視（轉頭時瞳孔距離縮短），不再額外做 cos 壓縮
+    const img = set.front;
+    if (!img.complete || !img.naturalWidth) { ctx.restore(); return; }
 
-    // Draw glasses image centered
-    ctx.drawImage(
-      img,
-      -glassesWidth / 2,
-      -glassesHeight / 2,
-      glassesWidth,
-      glassesHeight
+    const centerY = noseBridge ? eyeMidY + (noseBridge.y - eyeMidY) * 0.2 : eyeMidY;
+    const anchorX = noseBridge ? noseBridge.x : eyeMidX;
+    const drawW   = eyeDistance * this.glassesScale;
+    const drawH   = drawW * (img.naturalHeight / img.naturalWidth);
+
+    ctx.translate(anchorX, centerY);
+    ctx.rotate(tiltAngle);
+    ctx.drawImage(img,
+      -drawW / 2,
+      -drawH * FRONT_IMG_LENS_Y,
+      drawW, drawH,
     );
 
     ctx.restore();

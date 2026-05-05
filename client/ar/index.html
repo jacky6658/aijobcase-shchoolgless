@@ -69,6 +69,8 @@
         <!-- Camera + Canvas -->
         <video id="camera-video" autoplay playsinline class="absolute inset-0 w-full h-full object-cover mirror"></video>
         <canvas id="lens-canvas" class="absolute inset-0 w-full h-full object-cover mirror"></canvas>
+        <!-- 3D 眼鏡（Three.js WebGL canvas）-->
+        <canvas id="glasses-3d-canvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
 
         <!-- No Face Detected Overlay -->
         <div id="no-face-msg" class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-black/60 px-6 py-3 rounded-xl text-white/80 text-sm hidden">
@@ -135,14 +137,8 @@
                 <button data-color="brown" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-amber-600/60" title="棕色"></button>
                 <button data-color="grey" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-gray-400/60" title="灰色"></button>
             </div>
-            <!-- Glasses Styles -->
-            <div id="glasses-options" class="hidden flex gap-2 bg-black/50 backdrop-blur rounded-full px-3 py-2">
-                <button data-glasses="black" class="glasses-btn active px-3 py-1 rounded-full text-xs border border-white/30 bg-gray-900/80 text-white">黑框</button>
-                <button data-glasses="tortoise" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-amber-800/60 text-white">玳瑁</button>
-                <button data-glasses="gold" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-yellow-600/60 text-white">金屬</button>
-                <button data-glasses="red" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-red-700/60 text-white">紅框</button>
-                <button data-glasses="sunglasses" class="glasses-btn px-3 py-1 rounded-full text-xs border border-transparent bg-gray-800/80 text-white">墨鏡</button>
-            </div>
+            <!-- Glasses Styles (populated dynamically from /api/glasses) -->
+            <div id="glasses-options" class="hidden flex gap-2 overflow-x-auto bg-black/50 backdrop-blur rounded-2xl px-3 py-2 scrollbar-none text-white" style="max-width:90vw"></div>
             <!-- Size Adjustment Slider -->
             <div id="size-slider" class="flex items-center gap-2 bg-black/50 backdrop-blur rounded-full px-4 py-2">
                 <span class="text-[10px] text-white/60">小</span>
@@ -219,6 +215,12 @@
                             <div class="text-[10px] text-cyan-400 mt-0.5">推薦：大圓框・正方形眼鏡・飛行員</div>
                         </div>
                     </div>
+
+                    <!-- Recommended glasses grid (populated by JS) -->
+                    <div id="face-glasses-panel" class="hidden mt-2">
+                        <div class="text-[10px] text-white/40 mb-1.5">推薦款式 <span id="face-glasses-count" class="text-indigo-300"></span></div>
+                        <div id="face-glasses-grid" class="grid grid-cols-3 gap-1.5"></div>
+                    </div>
                 </div>
 
                 <!-- Tab: 眼鏡尺寸 -->
@@ -268,23 +270,23 @@
                     <div class="space-y-1.5 text-[11px]">
                         <div class="bg-cyan-500/10 rounded-lg px-3 py-2">
                             <div class="text-[10px] text-cyan-400/70 mb-1 font-semibold tracking-wide">瞳距</div>
-                            <div class="flex justify-between"><span class="text-white/50">總瞳距 PD</span><span id="optics-pd" class="text-cyan-300 font-mono font-bold">--</span></div>
-                            <div class="flex justify-between"><span class="text-white/50">左眼單眼 PD</span><span id="optics-pd-left" class="text-cyan-300 font-mono">--</span></div>
-                            <div class="flex justify-between"><span class="text-white/50">右眼單眼 PD</span><span id="optics-pd-right" class="text-cyan-300 font-mono">--</span></div>
+                            <div class="flex justify-between"><span class="text-white/50">總瞳距 PD</span><span id="tab-optics-pd" class="text-cyan-300 font-mono font-bold">--</span></div>
+                            <div class="flex justify-between"><span class="text-white/50">左眼單眼 PD</span><span id="tab-optics-pd-left" class="text-cyan-300 font-mono">--</span></div>
+                            <div class="flex justify-between"><span class="text-white/50">右眼單眼 PD</span><span id="tab-optics-pd-right" class="text-cyan-300 font-mono">--</span></div>
                         </div>
                         <div class="bg-emerald-500/10 rounded-lg px-3 py-2">
                             <div class="text-[10px] text-emerald-400/70 mb-1 font-semibold tracking-wide">虹膜</div>
-                            <div class="flex justify-between"><span class="text-white/50">左眼虹膜直徑</span><span id="optics-iris-l" class="text-emerald-300 font-mono">--</span></div>
-                            <div class="flex justify-between"><span class="text-white/50">右眼虹膜直徑</span><span id="optics-iris-r" class="text-emerald-300 font-mono">--</span></div>
+                            <div class="flex justify-between"><span class="text-white/50">左眼虹膜直徑</span><span id="tab-optics-iris-l" class="text-emerald-300 font-mono">--</span></div>
+                            <div class="flex justify-between"><span class="text-white/50">右眼虹膜直徑</span><span id="tab-optics-iris-r" class="text-emerald-300 font-mono">--</span></div>
                         </div>
                         <div class="bg-yellow-500/10 rounded-lg px-3 py-2">
                             <div class="text-[10px] text-yellow-400/70 mb-1 font-semibold tracking-wide">臉部幾何</div>
-                            <div class="flex justify-between"><span class="text-white/50">眼高差</span><span id="optics-height-diff" class="text-yellow-300 font-mono">--</span></div>
-                            <div class="flex justify-between"><span class="text-white/50">鏡框傾斜角</span><span id="optics-tilt" class="text-yellow-300 font-mono">--</span></div>
+                            <div class="flex justify-between"><span class="text-white/50">眼高差</span><span id="tab-optics-height-diff" class="text-yellow-300 font-mono">--</span></div>
+                            <div class="flex justify-between"><span class="text-white/50">鏡框傾斜角</span><span id="tab-optics-tilt" class="text-yellow-300 font-mono">--</span></div>
                         </div>
                         <div class="bg-violet-500/10 rounded-lg px-3 py-2">
                             <div class="text-[10px] text-violet-400/70 mb-1 font-semibold tracking-wide">建議尺寸</div>
-                            <div class="flex justify-between"><span class="text-white/50">建議鏡框總寬</span><span id="optics-frame-width" class="text-violet-300 font-mono">--</span></div>
+                            <div class="flex justify-between"><span class="text-white/50">建議鏡框總寬</span><span id="tab-optics-frame-width" class="text-violet-300 font-mono">--</span></div>
                         </div>
                     </div>
                 </div>
@@ -365,6 +367,155 @@
             </div>
             <div id="history-list" class="p-4 overflow-y-auto max-h-[50vh] space-y-2">
                 <div class="text-center text-white/40 text-sm py-8">載入中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 眼鏡素材上傳 Modal -->
+    <div id="upload-glasses-modal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" id="upload-glasses-backdrop"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-slate-900 rounded-2xl w-[520px] max-w-[95vw] max-h-[85vh] overflow-hidden border border-slate-700">
+            <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                <h3 class="text-sm font-semibold flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    匯入真實眼鏡素材（3 角度）
+                </h3>
+                <button id="upload-glasses-close" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/10 transition text-white/60 hover:text-white">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="overflow-y-auto max-h-[70vh] p-4 space-y-5">
+                <p class="text-[11px] text-white/40">每款眼鏡上傳三個角度的去背 PNG，轉頭時自動切換。建議圖片比例：正面 3:1，側面 2:1。</p>
+
+                <!-- 各款眼鏡 -->
+                <div class="space-y-4" id="glasses-upload-list">
+
+                    <!-- 黑框 -->
+                    <div class="bg-white/5 rounded-xl p-3">
+                        <div class="text-xs font-medium text-white mb-2">⬛ 黑框</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-black-sideLeft" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">左側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="black" data-angle="sideLeft">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-black-front" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">正面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="black" data-angle="front">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-black-sideRight" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">右側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="black" data-angle="sideRight">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 玳瑁 -->
+                    <div class="bg-white/5 rounded-xl p-3">
+                        <div class="text-xs font-medium text-white mb-2">🟫 玳瑁</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-tortoise-sideLeft" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">左側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="tortoise" data-angle="sideLeft">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-tortoise-front" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">正面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="tortoise" data-angle="front">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-tortoise-sideRight" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">右側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="tortoise" data-angle="sideRight">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 金屬 -->
+                    <div class="bg-white/5 rounded-xl p-3">
+                        <div class="text-xs font-medium text-white mb-2">🟡 金屬</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-gold-sideLeft" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">左側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="gold" data-angle="sideLeft">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-gold-front" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">正面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="gold" data-angle="front">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-gold-sideRight" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">右側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="gold" data-angle="sideRight">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 紅框 -->
+                    <div class="bg-white/5 rounded-xl p-3">
+                        <div class="text-xs font-medium text-white mb-2">🔴 紅框</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-red-sideLeft" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">左側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="red" data-angle="sideLeft">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-red-front" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">正面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="red" data-angle="front">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-red-sideRight" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">右側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="red" data-angle="sideRight">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 墨鏡 -->
+                    <div class="bg-white/5 rounded-xl p-3">
+                        <div class="text-xs font-medium text-white mb-2">🕶 墨鏡/飛行員</div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-sunglasses-sideLeft" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">左側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="sunglasses" data-angle="sideLeft">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-sunglasses-front" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">正面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="sunglasses" data-angle="front">
+                            </label>
+                            <label class="glasses-upload-slot border border-white/20 rounded-lg p-2 cursor-pointer hover:border-white/40 transition flex flex-col items-center gap-1.5">
+                                <img id="preview-sunglasses-sideRight" class="hidden h-8 object-contain mb-1" />
+                                <svg class="w-5 h-5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                                <span class="text-[10px] text-white/40">右側面</span>
+                                <input type="file" accept="image/*" class="hidden glasses-file-input" data-style="sunglasses" data-angle="sideRight">
+                            </label>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </div>
     </div>

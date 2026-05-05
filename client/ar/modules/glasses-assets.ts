@@ -2,9 +2,13 @@
  * glasses-assets.ts - Multi-angle glasses image loader
  * Each style has 3 views: front / sideLeft / sideRight
  * Default: all 3 fall back to the front PNG until overridden via uploadGlassesImage()
+ * Catalog products are registered dynamically via registerGlassesUrl()
  */
 
-import blackUrl      from '../assets/glasses-black.png';
+import blackUrl          from '../assets/glasses-black.png';
+import blackFrontUrl     from '../assets/glasses-black-front.png';
+import blackSideLeftUrl  from '../assets/glasses-black-sideLeft.png';
+import blackSideRightUrl from '../assets/glasses-black-sideRight.png';
 import tortoiseUrl   from '../assets/glasses-tortoise.png';
 import goldUrl       from '../assets/glasses-gold.png';
 import redUrl        from '../assets/glasses-red.png';
@@ -33,8 +37,22 @@ const DEFAULTS: Record<string, HTMLImageElement> = {
   sunglasses: loadImage(sunglassesUrl),
 };
 
-// Custom overrides per style × angle (set by uploadGlassesImage)
+// Custom overrides per style × angle (set by uploadGlassesImage or built-in 3-angle sets)
 const overrides = new Map<string, Partial<Record<GlassesAngle, HTMLImageElement>>>();
+
+// 黑框：3 角度真實圖
+overrides.set('black', {
+  front:     loadImage(blackFrontUrl),
+  sideLeft:  loadImage(blackSideLeftUrl),
+  sideRight: loadImage(blackSideRightUrl),
+});
+
+/** Register a catalog product image by its ID (fetched from server) */
+export function registerGlassesUrl(id: string, imageUrl: string): HTMLImageElement {
+  const img = loadImage(imageUrl);
+  DEFAULTS[id] = img;
+  return img;
+}
 
 /** Upload / replace a specific angle image for a glasses style */
 export function uploadGlassesImage(

@@ -96,7 +96,11 @@ app.use((req, res, next) => {
 });
 
 // ==================== Auth Middleware ====================
-app.use('/api', requireAuth);
+app.use('/api', (req, res, next) => {
+  // Glasses catalog list is public (read-only product data)
+  if (req.method === 'GET' && req.path === '/glasses') return next();
+  return requireAuth(req, res, next);
+});
 
 // ==================== Routes ====================
 app.use('/api/auth', require('./routes/auth'));

@@ -40,3 +40,6 @@ CREATE TABLE IF NOT EXISTS recommendation_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_rec_logs_student ON recommendation_logs(student_id, created_at DESC);
+
+-- 新增鏡腳顏色欄位（2026-05-05）
+ALTER TABLE glasses_catalog ADD COLUMN IF NOT EXISTS temple_color VARCHAR(10);

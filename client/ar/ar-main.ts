@@ -5,7 +5,8 @@
 
 import { initFaceDetector, type FaceResult } from './modules/face-detector';
 import { LensRenderer, type LensColor } from './modules/lens-renderer';
-import { uploadGlassesImage, type GlassesAngle } from './modules/glasses-assets';
+import { uploadGlassesImage, registerGlassesUrl, type GlassesAngle } from './modules/glasses-assets';
+import { Glasses3D } from './modules/glasses-3d';
 import { GuidanceController } from './modules/guidance-controller';
 import { VoiceInput } from './modules/voice-input';
 import { sendChatMessage, getUserInfo } from './modules/ar-chat';
@@ -40,6 +41,12 @@ let sessionActive = false;
 let sessionPaused = false;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let latestFaceResult: FaceResult | null = null;
+let usingCatalogGlasses = false; // true = use PNG canvas, false = use 3D scene
+
+// Three.js 3D 眼鏡
+const glasses3DCanvas = document.getElementById('glasses-3d-canvas') as HTMLCanvasElement;
+const glasses3DScene  = new Glasses3D(glasses3DCanvas, video);
+let glassesScale3D    = 1.0;
 
 // Modules
 const renderer = new LensRenderer(canvas);
@@ -117,19 +124,28 @@ function resizeCanvas() {
   const w = video.videoWidth || window.innerWidth;
   const h = video.videoHeight || window.innerHeight;
   renderer.resize(w, h);
+  glasses3DScene.resize();
   console.log(`Canvas resized: ${w}x${h}`);
 }
+window.addEventListener('resize', () => glasses3DScene.resize());
 
 video.addEventListener('loadedmetadata', resizeCanvas);
 video.addEventListener('playing', resizeCanvas);
 window.addEventListener('resize', resizeCanvas);
 
-// 60fps 獨立渲染迴圈，與 8fps 偵測分離
+// 60fps 獨立渲染迴圈，與偵測分離
 function renderLoop() {
   if (latestFaceResult?.detected) {
-    renderer.render(latestFaceResult.leftEye, latestFaceResult.rightEye, latestFaceResult.noseBridge, latestFaceResult.yaw);
+    if (renderer.getMode() === 'glasses') {
+      renderer.clear();
+      glasses3DScene.update(latestFaceResult, glassesScale3D);
+    } else {
+      glasses3DScene.hide();
+      renderer.render(latestFaceResult.leftEye, latestFaceResult.rightEye, latestFaceResult.noseBridge, latestFaceResult.yaw);
+    }
   } else {
     renderer.clear();
+    glasses3DScene.hide();
   }
   requestAnimationFrame(renderLoop);
 }
@@ -155,7 +171,8 @@ sizeRange.addEventListener('input', () => {
   sizeLabel.textContent = `${pct}%`;
   const mode = renderer.getMode();
   if (mode === 'glasses') {
-    renderer.setGlassesScale(2.8 * (pct / 100));
+    renderer.setGlassesScale(2.0 * (pct / 100));
+    glassesScale3D = pct / 100;
   } else {
     renderer.setLensScale(1.8 * (pct / 100));
   }
@@ -254,7 +271,7 @@ modeGlasses.addEventListener('click', () => {
   glassesOptions.classList.remove('hidden');
   contactOptions.classList.add('hidden');
   // Reset size slider to current glasses scale
-  sizeRange.value = String(Math.round((renderer.getGlassesScale() / 2.8) * 100));
+  sizeRange.value = String(Math.round((renderer.getGlassesScale() / 2.0) * 100));
   sizeLabel.textContent = `${sizeRange.value}%`;
 });
 
@@ -267,12 +284,22 @@ document.querySelectorAll('.lens-color-btn').forEach((btn) => {
   });
 });
 
+const BUILTIN_TEMPLE_COLORS: Record<string, number> = {
+  black: 0x111418, tortoise: 0x6b3a1f, gold: 0xc9a24a, red: 0x8a1f1f, sunglasses: 0x1a1a1a,
+};
+
+function applyBuiltinStyle(style: string) {
+  usingCatalogGlasses = false;
+  glasses3DScene.resetToBuiltinTexture();
+  glasses3DScene.setColor(BUILTIN_TEMPLE_COLORS[style] ?? 0x111418);
+}
+
 // Glasses style selection
 document.querySelectorAll('.glasses-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.glasses-btn').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
-    renderer.setGlassesStyle((btn as HTMLElement).dataset.glasses!);
+    applyBuiltinStyle((btn as HTMLElement).dataset.glasses!);
   });
 });
 
@@ -423,14 +450,20 @@ function updateOpticsPanel(result: FaceResult) {
   // 建議鏡框寬（眼距 × 2.8 scale，換算 mm）
   const frameWidthMm = (eyeDistPx * 2.8 * scale).toFixed(0);
 
-  document.getElementById('optics-pd')!.textContent          = `${pd} mm`;
-  document.getElementById('optics-pd-left')!.textContent     = `${pdLeft} mm`;
-  document.getElementById('optics-pd-right')!.textContent    = `${pdRight} mm`;
-  document.getElementById('optics-iris-l')!.textContent      = `${irisL} mm`;
-  document.getElementById('optics-iris-r')!.textContent      = `${irisR} mm`;
-  document.getElementById('optics-height-diff')!.textContent = `${heightDiffMm} mm`;
-  document.getElementById('optics-tilt')!.textContent        = `${tiltDeg}°`;
-  document.getElementById('optics-frame-width')!.textContent = `${frameWidthMm} mm`;
+  const setOptics = (id: string, val: string) => {
+    const el1 = document.getElementById(id);
+    const el2 = document.getElementById(`tab-${id}`);
+    if (el1) el1.textContent = val;
+    if (el2) el2.textContent = val;
+  };
+  setOptics('optics-pd',          `${pd} mm`);
+  setOptics('optics-pd-left',     `${pdLeft} mm`);
+  setOptics('optics-pd-right',    `${pdRight} mm`);
+  setOptics('optics-iris-l',      `${irisL} mm`);
+  setOptics('optics-iris-r',      `${irisR} mm`);
+  setOptics('optics-height-diff', `${heightDiffMm} mm`);
+  setOptics('optics-tilt',        `${tiltDeg}°`);
+  setOptics('optics-frame-width', `${frameWidthMm} mm`);
 }
 
 // 教學面板 Tab 切換
@@ -447,14 +480,17 @@ document.querySelectorAll('.edu-tab').forEach((tab) => {
   });
 });
 
-// 臉型卡片點擊 → 套用眼鏡
+// 臉型卡片點擊 → 顯示推薦眼鏡 + 套用
 document.querySelectorAll('.face-shape-card').forEach((card) => {
   card.addEventListener('click', () => {
     const glassesStyle = (card as HTMLElement).dataset.glasses!;
     const label        = (card as HTMLElement).dataset.label!;
+    const shape        = (card as HTMLElement).dataset.shape!;
 
     document.querySelectorAll('.face-shape-card').forEach(c => c.classList.remove('selected'));
     card.classList.add('selected');
+
+    showFaceGlasses(shape);
 
     // 移除舊的 apply btn，加新的
     card.querySelector('.apply-btn')?.remove();
@@ -464,7 +500,7 @@ document.querySelectorAll('.face-shape-card').forEach((card) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       renderer.setMode('glasses');
-      renderer.setGlassesStyle(glassesStyle);
+      applyBuiltinStyle(glassesStyle);
       document.querySelectorAll('.glasses-btn').forEach(b => b.classList.remove('active'));
       document.querySelector(`.glasses-btn[data-glasses="${glassesStyle}"]`)?.classList.add('active');
       modeGlasses.click();
@@ -507,8 +543,7 @@ document.querySelectorAll('.face-shape-btn').forEach((btn) => {
 
     document.getElementById('apply-face-rec')?.addEventListener('click', () => {
       renderer.setMode('glasses');
-      renderer.setGlassesStyle(rule.glasses);
-      // 同步 UI 狀態
+      applyBuiltinStyle(rule.glasses);
       document.querySelectorAll('.glasses-btn').forEach(b => b.classList.remove('active'));
       document.querySelector(`.glasses-btn[data-glasses="${rule.glasses}"]`)?.classList.add('active');
       modeGlasses.click();
@@ -550,5 +585,133 @@ document.querySelectorAll<HTMLInputElement>('.glasses-file-input').forEach((inpu
   });
 });
 
+// ── Glasses catalog from API ──────────────────────────────────────────────
+
+interface GlassesCatalogItem {
+  id: string;
+  name: string;
+  image_url: string;
+  frame_shape: string;
+  suitable_face_types: string[];
+  temple_color?: string;
+}
+
+// HTML data-shape → English FaceShape used in DB
+const SHAPE_MAP: Record<string, string> = {
+  oval: 'oval', heart: 'heart', oblong: 'long',
+  square: 'square', round: 'round', diamond: 'oval',
+};
+
+let catalogItems: GlassesCatalogItem[] = [];
+
+function buildGlassesButtons(items: { id: string; name: string; image_url: string; temple_color?: string }[]) {
+  const container = document.getElementById('glasses-options')!;
+  container.innerHTML = '';
+  items.forEach((item, idx) => {
+    registerGlassesUrl(item.id, item.image_url);
+    const btn = document.createElement('button');
+    btn.dataset.glasses = item.id;
+    btn.className = `glasses-btn shrink-0 px-2 py-1 rounded-lg text-xs border transition flex flex-col items-center gap-1 ${idx === 0 ? 'active border-white/60 bg-white/20' : 'border-transparent bg-white/5'}`;
+    btn.title = item.name;
+    const thumb = document.createElement('img');
+    thumb.src = item.image_url;
+    thumb.className = 'w-12 h-8 object-contain';
+    thumb.alt = item.name;
+    const label = document.createElement('span');
+    label.textContent = item.name.replace(/三麗鷗夢幻隊[▪︎\s]+/, '').replace(/｜.*$/, '').trim().slice(0, 5);
+    btn.append(thumb, label);
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.glasses-btn').forEach((b) => {
+        b.classList.remove('active', 'border-white/60', 'bg-white/20');
+        b.classList.add('border-transparent', 'bg-white/5');
+      });
+      btn.classList.add('active', 'border-white/60', 'bg-white/20');
+      btn.classList.remove('border-transparent', 'bg-white/5');
+      usingCatalogGlasses = true;
+      glasses3DScene.setCatalogTexture(item.image_url);
+      glasses3DScene.setColor(item.temple_color ? parseInt(item.temple_color.replace('#', ''), 16) : 0x111418);
+    });
+    container.appendChild(btn);
+  });
+  if (items.length > 0) {
+    usingCatalogGlasses = true;
+    glasses3DScene.setCatalogTexture(items[0].image_url);
+    const tc0 = items[0].temple_color;
+    glasses3DScene.setColor(tc0 ? parseInt(tc0.replace('#', ''), 16) : 0x111418);
+  }
+  console.log(`[glasses] loaded ${items.length} items`);
+}
+
+async function loadGlassesCatalog() {
+  const token = localStorage.getItem('edumind_token');
+  console.log('[glasses] token:', token ? 'found' : 'missing');
+  if (!token) return;
+
+  try {
+    const res = await fetch('/api/glasses', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    console.log('[glasses] API status:', res.status);
+    if (!res.ok) return;
+    const data = await res.json();
+    const items: GlassesCatalogItem[] = data.data ?? data.glasses ?? [];
+    console.log('[glasses] items count:', items.length);
+    if (Array.isArray(items) && items.length > 0) {
+      catalogItems = items;
+      buildGlassesButtons(items);
+    }
+  } catch (e) {
+    console.warn('[glasses] API failed:', e);
+  }
+}
+
+function showFaceGlasses(htmlShape: string) {
+  const faceShape = SHAPE_MAP[htmlShape] ?? htmlShape;
+  const matched = catalogItems.filter(g =>
+    g.suitable_face_types.includes(faceShape)
+  );
+  const panel = document.getElementById('face-glasses-panel')!;
+  const grid  = document.getElementById('face-glasses-grid')!;
+  const count = document.getElementById('face-glasses-count')!;
+
+  panel.classList.remove('hidden');
+  count.textContent = `（${matched.length} 款）`;
+  grid.innerHTML = '';
+
+  matched.forEach((item) => {
+    const card = document.createElement('button');
+    card.className = 'bg-white/5 hover:bg-white/15 border border-white/10 hover:border-indigo-400/60 rounded-lg p-1 flex flex-col items-center gap-0.5 transition';
+    card.title = item.name;
+
+    const thumb = document.createElement('img');
+    thumb.src = item.image_url;
+    thumb.className = 'w-full h-10 object-contain bg-white rounded';
+    thumb.alt = item.name;
+
+    const label = document.createElement('span');
+    label.className = 'text-[9px] text-white/60 text-center leading-tight line-clamp-1 w-full';
+    label.textContent = item.name.replace(/三麗鷗夢幻隊[▪︎\s]+/, '').replace(/｜.*$/, '').trim();
+
+    card.append(thumb, label);
+    card.addEventListener('click', () => {
+      usingCatalogGlasses = true;
+      renderer.setMode('glasses');
+      glasses3DScene.setCatalogTexture(item.image_url);
+      glasses3DScene.setColor(item.temple_color ? parseInt(item.temple_color.replace('#', ''), 16) : 0x111418);
+      modeGlasses.click();
+      // highlight in top bar if present
+      document.querySelectorAll('.glasses-btn').forEach(b => {
+        b.classList.remove('active', 'border-white/60', 'bg-white/20');
+        b.classList.add('border-transparent', 'bg-white/5');
+      });
+      document.querySelector(`.glasses-btn[data-glasses="${item.id}"]`)
+        ?.classList.add('active', 'border-white/60', 'bg-white/20');
+    });
+
+    grid.appendChild(card);
+  });
+}
+
 // Start
 init();
+loadGlassesCatalog();
