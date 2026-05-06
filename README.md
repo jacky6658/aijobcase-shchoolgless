@@ -250,6 +250,16 @@ roll  = Math.atan2(m10, m11);
 4. UI 改成可滑動款式選單（取代目前 5 款按鈕）
 5. （詳見「眼鏡素材管理」對應的後台模組）
 
+## 圖片資產說明
+
+| 資料夾 | 用途 | 數量 | 格式 |
+|--------|------|------|------|
+| `server/uploads/glasses/` | **AR 試戴去背圖**（正面，透明背景，由後端 API 提供給 AR 頁面使用）| 35 張 | 1000×1000 PNG，透明背景 |
+| `images/glasses/{臉型}/` | **臉型推薦展示圖**（_01 正面、_02/_03 側面，原始商品照）| 各臉型數張 | PNG，白底 |
+| `client/ar/assets/` | **內建 3D 眼鏡材質貼圖**（black/gold/red/tortoise/sunglasses 五款，程式碼 import 使用）| 8 張 | PNG，透明背景 |
+
+> `server/uploads/glasses/` 的詳細說明與商品列表請見 [server/uploads/glasses/README.md](server/uploads/glasses/README.md)
+
 ## 快速啟動
 
 ### 1. 環境設定
