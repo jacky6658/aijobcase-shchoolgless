@@ -62,6 +62,9 @@
                 <button id="btn-fullscreen" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition" title="全螢幕">
                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
                 </button>
+                <button id="btn-tour" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 transition" title="操作導覽">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </button>
                 <span id="user-name" class="text-sm text-white/70"></span>
             </div>
         </div>
@@ -145,7 +148,7 @@
         </div>
 
         <!-- Left Panel: 教學面板 -->
-        <div id="guidance-panel" class="absolute left-4 top-24 bottom-20 z-20 w-72">
+        <div id="guidance-panel" class="absolute left-4 top-24 bottom-20 z-20 w-72 panel-transition">
             <div class="bg-black/60 backdrop-blur-md rounded-2xl h-full flex flex-col overflow-hidden">
                 <!-- Tabs -->
                 <div class="flex border-b border-white/10 shrink-0">
@@ -315,6 +318,23 @@
                 </div>
             </div>
         </div>
+
+        <!-- Desktop Panel Toggle Tabs -->
+        <button id="btn-toggle-guidance" class="panel-toggle-left" title="展開/收起左側面板">
+            <svg id="icon-guidance" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/>
+            </svg>
+        </button>
+        <button id="btn-toggle-chat" class="panel-toggle-right" title="展開/收起右側面板">
+            <svg id="icon-chat" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 18l6-6-6-6"/>
+            </svg>
+        </button>
+        <button id="btn-toggle-topbar" class="panel-toggle-top" title="展開/收起頂部列">
+            <svg id="icon-topbar" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M18 15l-6-6-6 6"/>
+            </svg>
+        </button>
 
         <!-- Mobile Toggle FABs (mobile only via CSS) -->
         <button id="mobile-fab-guidance" class="mobile-fab left" title="操作步驟">
@@ -558,6 +578,218 @@
         </div>
     </div>
 
+    <!-- Tour Overlay -->
+    <div id="tour-highlight" style="display:none"></div>
+    <div id="tour-tooltip" style="display:none">
+        <div id="tour-step-counter"></div>
+        <h3 id="tour-title"></h3>
+        <p id="tour-desc"></p>
+        <div class="tour-actions">
+            <button id="tour-skip" class="tour-btn">略過</button>
+            <div>
+                <button id="tour-prev" class="tour-btn">← 上一步</button>
+                <button id="tour-next" class="tour-btn">下一步 →</button>
+            </div>
+        </div>
+        <div class="tour-auto-row">
+            <label class="tour-auto-label">
+                <input type="checkbox" id="tour-auto-toggle" checked>
+                <span>下次自動顯示</span>
+            </label>
+        </div>
+    </div>
+
     <script type="module" src="./ar-main.ts"></script>
+    <script>
+    (function () {
+        /* ── Panel Toggles ── */
+        const guidancePanel = document.getElementById('guidance-panel');
+        const chatPanel     = document.getElementById('chat-panel');
+        const topBar        = document.getElementById('top-bar');
+        const iconGuidance  = document.getElementById('icon-guidance');
+        const iconChat      = document.getElementById('icon-chat');
+        const iconTopbar    = document.getElementById('icon-topbar');
+
+        document.getElementById('btn-toggle-guidance').addEventListener('click', function () {
+            const collapsed = guidancePanel.classList.toggle('panel-collapsed');
+            iconGuidance.style.transform = collapsed ? 'rotate(180deg)' : '';
+        });
+
+        document.getElementById('btn-toggle-chat').addEventListener('click', function () {
+            const collapsed = chatPanel.classList.toggle('panel-collapsed');
+            iconChat.style.transform = collapsed ? 'rotate(180deg)' : '';
+        });
+
+        document.getElementById('btn-toggle-topbar').addEventListener('click', function () {
+            const collapsed = topBar.classList.toggle('panel-collapsed');
+            iconTopbar.style.transform = collapsed ? 'rotate(180deg)' : '';
+        });
+
+        /* ── Guided Tour ── */
+        var TOUR_STEPS = [
+            {
+                el: '#top-bar',
+                title: '頂部功能列',
+                desc: '可返回主系統，右側按鈕提供視光數據、練習紀錄、臉型推薦、全螢幕等功能，也可點「?」隨時重新啟動導覽。',
+                pos: 'bottom'
+            },
+            {
+                el: '#mode-selector',
+                title: '模式切換與款式選擇',
+                desc: '在「隱形眼鏡」與「眼鏡」之間切換，再從列表選擇款式。下方滑桿可即時調整大小比例。',
+                pos: 'bottom'
+            },
+            {
+                el: '#guidance-panel',
+                title: '配鏡教學面板',
+                desc: '三個分頁：依臉型推薦眼鏡款式、眼鏡尺寸知識，以及鏡頭即時估算的瞳距與虹膜數據。',
+                pos: 'right',
+                expandPanel: 'guidance'
+            },
+            {
+                el: '#chat-panel',
+                title: 'AI 助教',
+                desc: '遇到任何操作或配鏡問題，可輸入文字或點麥克風語音提問，AI 立即回答（最長 30 秒錄音）。',
+                pos: 'left',
+                expandPanel: 'chat'
+            },
+            {
+                el: '#control-bar',
+                title: '練習控制列',
+                desc: '點「開始練習」啟動計時器。完成後點「結束儲存」，系統自動記錄本次練習時間與配鏡款式，供教師查閱。',
+                pos: 'top'
+            },
+            {
+                el: '#btn-toggle-guidance',
+                title: '面板收折功能',
+                desc: '點擊左右邊緣的箭頭可收起側邊面板，讓鏡頭畫面更寬廣；再次點擊即可展開。頂部也有同樣的收折按鈕。',
+                pos: 'right'
+            }
+        ];
+
+        var tourStep = 0;
+        var tourActive = false;
+        var hlEl = document.getElementById('tour-highlight');
+        var tipEl = document.getElementById('tour-tooltip');
+
+        function expandPanel(name) {
+            if (name === 'guidance') {
+                guidancePanel.classList.remove('panel-collapsed');
+                iconGuidance.style.transform = '';
+            } else if (name === 'chat') {
+                chatPanel.classList.remove('panel-collapsed');
+                iconChat.style.transform = '';
+            }
+            topBar.classList.remove('panel-collapsed');
+            iconTopbar.style.transform = '';
+        }
+
+        function positionTip(rect, pos) {
+            var pad = 8, gap = 14, tipW = 252, tipH = 175;
+            var left, top;
+            if (pos === 'bottom') {
+                left = rect.left + rect.width / 2 - tipW / 2;
+                top  = rect.bottom + pad + gap;
+            } else if (pos === 'top') {
+                left = rect.left + rect.width / 2 - tipW / 2;
+                top  = rect.top - pad - gap - tipH;
+            } else if (pos === 'right') {
+                left = rect.right + pad + gap;
+                top  = rect.top + rect.height / 2 - tipH / 2;
+            } else {
+                left = rect.left - pad - gap - tipW;
+                top  = rect.top + rect.height / 2 - tipH / 2;
+            }
+            left = Math.max(10, Math.min(left, window.innerWidth  - tipW - 10));
+            top  = Math.max(10, Math.min(top,  window.innerHeight - tipH - 10));
+            tipEl.style.left = left + 'px';
+            tipEl.style.top  = top  + 'px';
+        }
+
+        function showTourStep(idx) {
+            var step = TOUR_STEPS[idx];
+            if (step.expandPanel) expandPanel(step.expandPanel);
+
+            var target = document.querySelector(step.el);
+            if (!target) { advanceTour(1); return; }
+
+            var rect = target.getBoundingClientRect();
+            var pad = 8;
+            hlEl.style.left   = (rect.left   - pad) + 'px';
+            hlEl.style.top    = (rect.top    - pad) + 'px';
+            hlEl.style.width  = (rect.width  + pad * 2) + 'px';
+            hlEl.style.height = (rect.height + pad * 2) + 'px';
+
+            document.getElementById('tour-step-counter').textContent = (idx + 1) + ' / ' + TOUR_STEPS.length;
+            document.getElementById('tour-title').textContent = step.title;
+            document.getElementById('tour-desc').textContent  = step.desc;
+            document.getElementById('tour-prev').style.visibility = idx === 0 ? 'hidden' : '';
+            document.getElementById('tour-next').textContent = idx === TOUR_STEPS.length - 1 ? '完成 ✓' : '下一步 →';
+
+            positionTip(rect, step.pos);
+        }
+
+        function advanceTour(dir) {
+            tourStep += dir;
+            if (tourStep >= TOUR_STEPS.length) { endTour(); return; }
+            if (tourStep < 0) tourStep = 0;
+            showTourStep(tourStep);
+        }
+
+        var autoToggle = document.getElementById('tour-auto-toggle');
+
+        /* Sync checkbox to current localStorage state */
+        autoToggle.checked = !localStorage.getItem('ar-tour-done');
+
+        autoToggle.addEventListener('change', function () {
+            if (this.checked) {
+                localStorage.removeItem('ar-tour-done');
+            } else {
+                localStorage.setItem('ar-tour-done', '1');
+            }
+        });
+
+        function startTour() {
+            tourStep = 0;
+            tourActive = true;
+            /* Reflect current auto-start preference in checkbox */
+            autoToggle.checked = !localStorage.getItem('ar-tour-done');
+            hlEl.style.display  = '';
+            tipEl.style.display = '';
+            showTourStep(0);
+        }
+
+        function endTour() {
+            tourActive = false;
+            hlEl.style.display  = 'none';
+            tipEl.style.display = 'none';
+            /* Save preference based on checkbox */
+            if (!autoToggle.checked) {
+                localStorage.setItem('ar-tour-done', '1');
+            } else {
+                localStorage.removeItem('ar-tour-done');
+            }
+        }
+
+        document.getElementById('tour-next').addEventListener('click', function () { advanceTour(1); });
+        document.getElementById('tour-prev').addEventListener('click', function () { advanceTour(-1); });
+        document.getElementById('tour-skip').addEventListener('click', endTour);
+        document.getElementById('btn-tour').addEventListener('click', startTour);
+
+        /* Auto-start on first visit */
+        var arAppEl = document.getElementById('ar-app');
+        var tourObserver = new MutationObserver(function (mutations) {
+            mutations.forEach(function (m) {
+                if (m.attributeName === 'class' && !arAppEl.classList.contains('hidden')) {
+                    if (!localStorage.getItem('ar-tour-done')) {
+                        setTimeout(startTour, 900);
+                    }
+                    tourObserver.disconnect();
+                }
+            });
+        });
+        tourObserver.observe(arAppEl, { attributes: true });
+    })();
+    </script>
 </body>
 </html>
