@@ -298,9 +298,11 @@ modeGlasses.addEventListener('click', () => {
   modeContact.classList.remove('active');
   glassesOptions.classList.remove('hidden');
   contactOptions.classList.add('hidden');
-  // Reset size slider to current glasses scale
-  sizeRange.value = String(Math.round((renderer.getGlassesScale() / 2.0) * 100));
-  sizeLabel.textContent = `${sizeRange.value}%`;
+  // Reset size slider and sync glassesScale3D
+  const pct = Math.round((renderer.getGlassesScale() / 2.0) * 100);
+  sizeRange.value = String(pct);
+  sizeLabel.textContent = `${pct}%`;
+  glassesScale3D = pct / 100;
 });
 
 // Lens catalog — dynamic buttons from API

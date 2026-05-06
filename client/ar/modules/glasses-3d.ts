@@ -183,13 +183,15 @@ export class Glasses3D {
    * @param scale 整體縮放（user 可調）
    */
   update(face: FaceResult | null, scale = 1.0) {
-    if (!face?.detected || !face.pose) {
+    if (!face?.detected) {
       this.glasses.visible = false;
       this.renderer.render(this.scene, this.camera);
       return;
     }
 
-    const { leftEye, rightEye, noseBridge, pose } = face;
+    // Fall back to frontal pose when head-pose is unavailable (e.g. user wears real glasses)
+    const pose = face.pose ?? { yaw: 0, pitch: 0, roll: 0 };
+    const { leftEye, rightEye, noseBridge } = face;
     const videoW = this.videoEl.videoWidth;
     const videoH = this.videoEl.videoHeight;
     const dispW  = this.videoEl.clientWidth;
