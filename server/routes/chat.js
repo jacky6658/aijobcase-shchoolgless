@@ -24,7 +24,7 @@ const HISTORY_WINDOW = 8;
  * Body: { message, courseId }
  */
 router.post('/stream', async (req, res) => {
-  const { message, courseId } = req.body;
+  const { message, courseId, arContext } = req.body;
   if (!message) {
     return res.status(400).json({ success: false, error: '請提供 message' });
   }
@@ -100,7 +100,7 @@ router.post('/stream', async (req, res) => {
 
     // 6. 串流 Gemini 回覆（傳入 history，啟動記憶體）
     let fullResponse = '';
-    const stream = chatStream(message, context, history);
+    const stream = chatStream(message, context, history, arContext);
     for await (const chunk of stream) {
       fullResponse += chunk;
       res.write(`data: ${JSON.stringify({ type: 'token', text: chunk })}\n\n`);

@@ -369,6 +369,39 @@ function addChatMessage(text: string, role: 'user' | 'ai') {
   return div;
 }
 
+function getArContext(): string {
+  const STYLE_ZH: Record<string, string> = {
+    black: '黑框', tortoise: '玳瑁', gold: '金屬', red: '紅框', sunglasses: '墨鏡/飛行員',
+  };
+  const parts: string[] = [];
+
+  if (renderer.getMode() === 'contact') {
+    const activeBtn = document.querySelector<HTMLElement>('.lens-catalog-btn.ring-white, .lens-catalog-btn.ring-2');
+    parts.push(`模式：隱形眼鏡（${activeBtn?.title || '未選款式'}）`);
+  } else {
+    const activeGlasses = document.querySelector<HTMLElement>('.glasses-btn.active');
+    const style = activeGlasses?.dataset.glasses ?? '';
+    parts.push(`模式：眼鏡（${STYLE_ZH[style] || style || '未選款式'}）`);
+  }
+
+  const selectedCard = document.querySelector<HTMLElement>('.face-shape-card.selected');
+  if (selectedCard) {
+    const label = selectedCard.querySelector<HTMLElement>('.text-xs.font-medium')?.textContent ?? '';
+    if (label) parts.push(`已選臉型：${label}`);
+  }
+
+  if (sessionActive) {
+    parts.push(`練習${sessionPaused ? '暫停' : '進行中'}（用時 ${timerDisplay.textContent}）`);
+  } else {
+    parts.push('練習尚未開始');
+  }
+
+  const pd = document.getElementById('tab-optics-pd')?.textContent;
+  if (pd && pd !== '--') parts.push(`即時估算瞳距：${pd}`);
+
+  return parts.join('；');
+}
+
 async function handleSendMessage(text: string) {
   if (!text.trim()) return;
   chatInput.value = '';
@@ -388,7 +421,8 @@ async function handleSendMessage(text: string) {
       chatMessages.scrollTop = chatMessages.scrollHeight;
     },
     () => { /* done */ },
-    (err) => { aiMsg.textContent = `錯誤: ${err}`; }
+    (err) => { aiMsg.textContent = `錯誤: ${err}`; },
+    getArContext()
   );
 }
 

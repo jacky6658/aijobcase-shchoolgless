@@ -19,11 +19,13 @@ export async function sendChatMessage(
   courseId: string | null,
   onToken: (text: string) => void,
   onDone: () => void,
-  onError: (err: string) => void
+  onError: (err: string) => void,
+  arContext?: string
 ) {
   try {
     const body: any = { message, mode: 'qa' };
     if (courseId) body.courseId = courseId;
+    if (arContext) body.arContext = arContext;
 
     const res = await fetch('/api/chat/stream', {
       method: 'POST',

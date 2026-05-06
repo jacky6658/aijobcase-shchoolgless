@@ -25,17 +25,31 @@ const SYSTEM_INSTRUCTION = `你是一位專業的護理教學 AI 課程助教。
 3. 當學生問「為什麼」時，嘗試從教材中找出因果關係（如生理機轉、護理依據）來解釋。
 4. 若教材中有相關但不完全匹配的內容，可以做合理推論，但需標明「推論」。`;
 
+const AR_SYSTEM_INSTRUCTION = `你是「EduMind AR 助教」，協助學生在 AR 隱形眼鏡與眼鏡試戴模擬系統中學習配鏡知識與操作技巧。
+
+【回覆規範】
+- 回覆在 150 字以內，精簡切題。
+- 優先根據使用者目前的操作狀態給予針對性建議。
+- 使用繁體中文，語氣親切專業。
+- 若問題超出配鏡/AR操作範圍，請簡短說明並引導回主題。`;
+
 /**
  * 串流聊天（async generator）
  */
-async function* chatStream(prompt, context, history = []) {
+async function* chatStream(prompt, context, history = [], arContext = '') {
   if (!genAI) throw new Error('Gemini API 未設定');
 
-  const contextText = context.length > 0
-    ? `\n\n以下是相關教材片段：\n${context.map((c, i) => `[片段${i + 1}] ${c}`).join('\n---\n')}`
-    : '\n\n（目前沒有找到相關教材片段）';
-
-  const fullInstruction = SYSTEM_INSTRUCTION + contextText;
+  let fullInstruction;
+  if (arContext) {
+    // AR 助教模式：使用 AR 專屬 system prompt，注入即時操作狀態
+    fullInstruction = `${AR_SYSTEM_INSTRUCTION}\n\n【使用者目前狀態】\n${arContext}`;
+  } else {
+    // 課程模式：使用原本護理教學 prompt + RAG 片段
+    const contextText = context.length > 0
+      ? `\n\n以下是相關教材片段：\n${context.map((c, i) => `[片段${i + 1}] ${c}`).join('\n---\n')}`
+      : '\n\n（目前沒有找到相關教材片段）';
+    fullInstruction = SYSTEM_INSTRUCTION + contextText;
+  }
 
   const result = await geminiLimit(async () => {
     return genAI.models.generateContentStream({
