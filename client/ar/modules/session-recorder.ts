@@ -2,6 +2,17 @@
  * session-recorder.ts - Records AR practice sessions to backend
  */
 
+export interface OpticsSnapshot {
+  pdMm: number;
+  pdLeftMm: number;
+  pdRightMm: number;
+  irisLMm: number;
+  irisRMm: number;
+  eyeHeightDiffMm: number;
+  frameTiltDeg: number;
+  recommendedFrameWidthMm: number;
+}
+
 function getHeaders(): Record<string, string> {
   const token = localStorage.getItem('edumind_token');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -42,7 +53,11 @@ export class SessionRecorder {
     }
   }
 
-  async endSession(stepsCompleted: number, status: 'COMPLETED' | 'ABANDONED' = 'COMPLETED') {
+  async endSession(
+    stepsCompleted: number,
+    status: 'COMPLETED' | 'ABANDONED' = 'COMPLETED',
+    optics?: OpticsSnapshot,
+  ) {
     if (!this.sessionId) return;
     const duration = Math.floor((Date.now() - this.startTime) / 1000);
     try {
@@ -53,6 +68,16 @@ export class SessionRecorder {
           status,
           stepsCompleted,
           durationSeconds: duration,
+          ...(optics ? {
+            pdMm: optics.pdMm,
+            pdLeftMm: optics.pdLeftMm,
+            pdRightMm: optics.pdRightMm,
+            irisLMm: optics.irisLMm,
+            irisRMm: optics.irisRMm,
+            eyeHeightDiffMm: optics.eyeHeightDiffMm,
+            frameTiltDeg: optics.frameTiltDeg,
+            recommendedFrameWidthMm: optics.recommendedFrameWidthMm,
+          } : {}),
         }),
       });
     } catch {

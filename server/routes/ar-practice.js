@@ -21,16 +21,33 @@ router.post('/sessions', async (req, res) => {
 // PATCH /api/ar-practice/sessions/:id - End/update session
 router.patch('/sessions/:id', async (req, res) => {
   try {
-    const { status, stepsCompleted, durationSeconds } = req.body;
+    const {
+      status, stepsCompleted, durationSeconds,
+      pdMm, pdLeftMm, pdRightMm, irisLMm, irisRMm,
+      eyeHeightDiffMm, frameTiltDeg, recommendedFrameWidthMm,
+    } = req.body;
     const { rows } = await pool.query(
       `UPDATE ar_practice_sessions
        SET status = COALESCE($1, status),
            steps_completed = COALESCE($2, steps_completed),
            duration_seconds = COALESCE($3, duration_seconds),
-           ended_at = NOW()
+           ended_at = NOW(),
+           pd_mm = COALESCE($6, pd_mm),
+           pd_left_mm = COALESCE($7, pd_left_mm),
+           pd_right_mm = COALESCE($8, pd_right_mm),
+           iris_l_mm = COALESCE($9, iris_l_mm),
+           iris_r_mm = COALESCE($10, iris_r_mm),
+           eye_height_diff_mm = COALESCE($11, eye_height_diff_mm),
+           frame_tilt_deg = COALESCE($12, frame_tilt_deg),
+           recommended_frame_width_mm = COALESCE($13, recommended_frame_width_mm)
        WHERE id = $4 AND student_id = $5
        RETURNING *`,
-      [status, stepsCompleted, durationSeconds, req.params.id, req.user.id]
+      [
+        status, stepsCompleted, durationSeconds, req.params.id, req.user.id,
+        pdMm ?? null, pdLeftMm ?? null, pdRightMm ?? null,
+        irisLMm ?? null, irisRMm ?? null,
+        eyeHeightDiffMm ?? null, frameTiltDeg ?? null, recommendedFrameWidthMm ?? null,
+      ]
     );
     if (rows.length === 0) return res.status(404).json({ success: false, error: 'Session not found' });
     res.json({ success: true, data: rows[0] });

@@ -10,7 +10,7 @@ import { Glasses3D } from './modules/glasses-3d';
 import { GuidanceController } from './modules/guidance-controller';
 import { VoiceInput } from './modules/voice-input';
 import { sendChatMessage, getUserInfo } from './modules/ar-chat';
-import { SessionRecorder } from './modules/session-recorder';
+import { SessionRecorder, type OpticsSnapshot } from './modules/session-recorder';
 
 // DOM elements
 const loadingScreen = document.getElementById('loading-screen')!;
@@ -42,6 +42,34 @@ let sessionPaused = false;
 let timerInterval: ReturnType<typeof setInterval> | null = null;
 let latestFaceResult: FaceResult | null = null;
 let usingCatalogGlasses = false; // true = use PNG canvas, false = use 3D scene
+
+// Optics accumulator — running average of measurements while session is active
+const opticsAcc = {
+  pd: [] as number[], pdLeft: [] as number[], pdRight: [] as number[],
+  irisL: [] as number[], irisR: [] as number[],
+  heightDiff: [] as number[], tilt: [] as number[], frameW: [] as number[],
+};
+function clearOpticsAcc() {
+  for (const k of Object.keys(opticsAcc)) (opticsAcc as any)[k] = [];
+}
+function avgOrNull(arr: number[]): number | undefined {
+  if (arr.length === 0) return undefined;
+  return Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10;
+}
+function getOpticsSnapshot(): OpticsSnapshot | undefined {
+  const pd = avgOrNull(opticsAcc.pd);
+  if (pd === undefined) return undefined;
+  return {
+    pdMm: pd,
+    pdLeftMm: avgOrNull(opticsAcc.pdLeft)!,
+    pdRightMm: avgOrNull(opticsAcc.pdRight)!,
+    irisLMm: avgOrNull(opticsAcc.irisL)!,
+    irisRMm: avgOrNull(opticsAcc.irisR)!,
+    eyeHeightDiffMm: avgOrNull(opticsAcc.heightDiff)!,
+    frameTiltDeg: avgOrNull(opticsAcc.tilt)!,
+    recommendedFrameWidthMm: Math.round(avgOrNull(opticsAcc.frameW)!),
+  };
+}
 
 // Three.js 3D 眼鏡
 const glasses3DCanvas = document.getElementById('glasses-3d-canvas') as HTMLCanvasElement;
@@ -360,6 +388,7 @@ function updateTimer() {
 }
 
 btnStart.addEventListener('click', async () => {
+  clearOpticsAcc();
   await recorder.startSession();
   guidance.reset();
   guidance.start();
@@ -393,7 +422,7 @@ btnEnd.addEventListener('click', async () => {
   if (timerInterval) clearInterval(timerInterval);
   const completed = guidance.getCompletedCount();
   const status = guidance.isCompleted() ? 'COMPLETED' : 'ABANDONED';
-  await recorder.endSession(completed, status);
+  await recorder.endSession(completed, status, getOpticsSnapshot());
 
   sessionActive = false;
   sessionPaused = false;
@@ -464,6 +493,18 @@ function updateOpticsPanel(result: FaceResult) {
   setOptics('optics-height-diff', `${heightDiffMm} mm`);
   setOptics('optics-tilt',        `${tiltDeg}°`);
   setOptics('optics-frame-width', `${frameWidthMm} mm`);
+
+  // Accumulate into running average while session is active
+  if (sessionActive && !sessionPaused) {
+    opticsAcc.pd.push(parseFloat(pd));
+    opticsAcc.pdLeft.push(parseFloat(pdLeft));
+    opticsAcc.pdRight.push(parseFloat(pdRight));
+    opticsAcc.irisL.push(parseFloat(irisL));
+    opticsAcc.irisR.push(parseFloat(irisR));
+    opticsAcc.heightDiff.push(parseFloat(heightDiffMm));
+    opticsAcc.tilt.push(parseFloat(tiltDeg));
+    opticsAcc.frameW.push(parseFloat(frameWidthMm));
+  }
 }
 
 // 教學面板 Tab 切換
