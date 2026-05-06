@@ -136,8 +136,14 @@
             <div id="contact-options" class="flex gap-2 overflow-x-auto bg-black/50 backdrop-blur rounded-2xl px-3 py-2 scrollbar-none" style="max-width:90vw">
                 <!-- lens buttons injected by buildLensButtons() -->
             </div>
-            <!-- Glasses Styles (populated dynamically from /api/glasses) -->
-            <div id="glasses-options" class="hidden flex gap-2 overflow-x-auto bg-black/50 backdrop-blur rounded-2xl px-3 py-2 scrollbar-none text-white" style="max-width:90vw"></div>
+            <!-- Glasses Styles (built-in fallbacks replaced by catalog when API loads) -->
+            <div id="glasses-options" class="hidden flex gap-2 overflow-x-auto bg-black/50 backdrop-blur rounded-2xl px-3 py-2 scrollbar-none text-white" style="max-width:90vw">
+                <button class="glasses-btn active shrink-0 px-3 py-1.5 rounded-lg text-xs border border-white/60 bg-white/20 transition" data-glasses="black">黑框</button>
+                <button class="glasses-btn shrink-0 px-3 py-1.5 rounded-lg text-xs border border-transparent bg-white/5 transition" data-glasses="tortoise">玳瑁</button>
+                <button class="glasses-btn shrink-0 px-3 py-1.5 rounded-lg text-xs border border-transparent bg-white/5 transition" data-glasses="gold">金框</button>
+                <button class="glasses-btn shrink-0 px-3 py-1.5 rounded-lg text-xs border border-transparent bg-white/5 transition" data-glasses="red">紅框</button>
+                <button class="glasses-btn shrink-0 px-3 py-1.5 rounded-lg text-xs border border-transparent bg-white/5 transition" data-glasses="sunglasses">墨鏡</button>
+            </div>
             <!-- Size Adjustment Slider -->
             <div id="size-slider" class="flex items-center gap-2 bg-black/50 backdrop-blur rounded-full px-4 py-2">
                 <span class="text-[10px] text-white/60">小</span>

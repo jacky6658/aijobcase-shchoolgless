@@ -78,7 +78,9 @@ export class LensRenderer {
   private renderContactLens(eye: EyeData) {
     const ctx = this.ctx;
     const { irisCenter, irisRadius } = eye;
-    const lensRadius = irisRadius * this.lensScale;
+    // Clamp to 5% of canvas height — prevents huge circles if MediaPipe mis-detects glasses as iris
+    const maxIris = this.canvas.height * 0.05;
+    const lensRadius = Math.min(irisRadius, maxIris) * this.lensScale;
 
     ctx.save();
 
@@ -98,8 +100,9 @@ export class LensRenderer {
 
     // Fallback: gradient colour overlay
     const colorDef = LENS_COLORS[this.color];
+    const effectiveIris = Math.min(irisRadius, maxIris);
     const gradient = ctx.createRadialGradient(
-      irisCenter.x, irisCenter.y, irisRadius * 0.2,
+      irisCenter.x, irisCenter.y, effectiveIris * 0.2,
       irisCenter.x, irisCenter.y, lensRadius
     );
     gradient.addColorStop(0, 'rgba(0,0,0,0)');
@@ -120,7 +123,7 @@ export class LensRenderer {
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.arc(irisCenter.x, irisCenter.y - irisRadius * 0.1, irisRadius * 0.7, -Math.PI * 0.75, -Math.PI * 0.25);
+    ctx.arc(irisCenter.x, irisCenter.y - effectiveIris * 0.1, effectiveIris * 0.7, -Math.PI * 0.75, -Math.PI * 0.25);
     ctx.strokeStyle = `rgba(255, 255, 255, ${colorDef.opacity * 0.6})`;
     ctx.lineWidth = 2;
     ctx.stroke();
