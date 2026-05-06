@@ -303,14 +303,42 @@ modeGlasses.addEventListener('click', () => {
   sizeLabel.textContent = `${sizeRange.value}%`;
 });
 
-// Lens color selection
-document.querySelectorAll('.lens-color-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.lens-color-btn').forEach((b) => b.classList.remove('active'));
-    btn.classList.add('active');
-    renderer.setColor((btn as HTMLElement).dataset.color as LensColor);
+// Lens catalog — dynamic buttons from API
+function buildLensButtons(items: { id: string; name: string; image_url: string; lens_color?: string }[]) {
+  const container = document.getElementById('contact-options')!;
+  container.innerHTML = '';
+  items.forEach((item, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'lens-catalog-btn flex-shrink-0 w-10 h-10 rounded-full border-2 border-transparent overflow-hidden transition hover:border-white/70 focus:outline-none';
+    if (i === 0) btn.classList.add('ring-2', 'ring-white');
+    btn.title = item.lens_color || item.name;
+    const img = document.createElement('img');
+    img.src = item.image_url;
+    img.className = 'w-full h-full object-cover rounded-full';
+    img.draggable = false;
+    btn.appendChild(img);
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.lens-catalog-btn').forEach((b) => {
+        b.classList.remove('ring-2', 'ring-white');
+      });
+      btn.classList.add('ring-2', 'ring-white');
+      renderer.setLensImage(item.image_url);
+    });
+    container.appendChild(btn);
   });
-});
+  // Activate first item
+  if (items.length > 0) renderer.setLensImage(items[0].image_url);
+}
+
+async function fetchLensCatalog() {
+  try {
+    const res = await fetch('/api/glasses?item_type=lens');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.success && data.data?.length) buildLensButtons(data.data);
+  } catch { /* silent */ }
+}
+fetchLensCatalog();
 
 const BUILTIN_TEMPLE_COLORS: Record<string, number> = {
   black: 0x111418, tortoise: 0x6b3a1f, gold: 0xc9a24a, red: 0x8a1f1f, sunglasses: 0x1a1a1a,

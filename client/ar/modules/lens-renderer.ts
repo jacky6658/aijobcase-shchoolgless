@@ -10,6 +10,18 @@ import { getGlassesSet } from './glasses-assets';
 export type LensColor = 'clear' | 'blue' | 'green' | 'brown' | 'grey';
 export type RenderMode = 'contact' | 'glasses';
 
+// Cache for preloaded lens product images
+const lensImageCache = new Map<string, HTMLImageElement>();
+
+function loadLensImage(url: string): HTMLImageElement {
+  if (!lensImageCache.has(url)) {
+    const img = new Image();
+    img.src = url;
+    lensImageCache.set(url, img);
+  }
+  return lensImageCache.get(url)!;
+}
+
 const LENS_COLORS: Record<LensColor, { inner: string; outer: string; opacity: number }> = {
   clear:  { inner: 'rgba(180, 210, 255, 0.25)', outer: 'rgba(80, 130, 220, 0.50)',  opacity: 0.40 },
   blue:   { inner: 'rgba(60, 130, 246, 0.55)',  outer: 'rgba(30, 80, 200, 0.75)',   opacity: 0.65 },
@@ -37,13 +49,15 @@ export class LensRenderer {
   private glassesStyle = 'black';
   private glassesScale = DEFAULT_GLASSES_SCALE;
   private lensScale = LENS_SIZE_MULTIPLIER;
+  private lensImageUrl: string | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
   }
 
-  setColor(color: LensColor) { this.color = color; }
+  setColor(color: LensColor) { this.color = color; this.lensImageUrl = null; }
+  setLensImage(url: string | null) { this.lensImageUrl = url; }
   setMode(mode: RenderMode) { this.mode = mode; }
   setGlassesStyle(style: string) { this.glassesStyle = style; }
   getMode(): RenderMode { return this.mode; }
@@ -65,11 +79,23 @@ export class LensRenderer {
     const ctx = this.ctx;
     const { irisCenter, irisRadius } = eye;
     const lensRadius = irisRadius * this.lensScale;
-    const colorDef = LENS_COLORS[this.color];
 
     ctx.save();
 
-    // Draw lens with radial gradient (no clipping - works better with glasses)
+    // Product image overlay mode
+    if (this.lensImageUrl) {
+      const img = loadLensImage(this.lensImageUrl);
+      if (img.complete && img.naturalWidth) {
+        const d = lensRadius * 2;
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(img, irisCenter.x - lensRadius, irisCenter.y - lensRadius, d, d);
+        ctx.restore();
+        return;
+      }
+    }
+
+    // Fallback: gradient colour overlay
+    const colorDef = LENS_COLORS[this.color];
     const gradient = ctx.createRadialGradient(
       irisCenter.x, irisCenter.y, irisRadius * 0.2,
       irisCenter.x, irisCenter.y, lensRadius
@@ -85,14 +111,12 @@ export class LensRenderer {
     ctx.fillStyle = gradient;
     ctx.fill();
 
-    // Lens edge ring
     ctx.beginPath();
     ctx.arc(irisCenter.x, irisCenter.y, lensRadius * 0.9, 0, Math.PI * 2);
     ctx.strokeStyle = colorDef.outer;
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Fresnel highlight
     ctx.beginPath();
     ctx.arc(irisCenter.x, irisCenter.y - irisRadius * 0.1, irisRadius * 0.7, -Math.PI * 0.75, -Math.PI * 0.25);
     ctx.strokeStyle = `rgba(255, 255, 255, ${colorDef.opacity * 0.6})`;

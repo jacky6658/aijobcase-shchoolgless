@@ -129,13 +129,9 @@
                 <button id="mode-contact" class="mode-btn active px-4 py-1.5 rounded-full text-xs font-medium transition">隱形眼鏡</button>
                 <button id="mode-glasses" class="mode-btn px-4 py-1.5 rounded-full text-xs font-medium transition">眼鏡</button>
             </div>
-            <!-- Contact Lens Colors -->
-            <div id="contact-options" class="flex gap-2 bg-black/50 backdrop-blur rounded-full px-3 py-2">
-                <button data-color="clear" class="lens-color-btn active w-8 h-8 rounded-full border-2 border-white/50 bg-white/20" title="透明"></button>
-                <button data-color="blue" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-blue-400/60" title="藍色"></button>
-                <button data-color="green" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-green-400/60" title="綠色"></button>
-                <button data-color="brown" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-amber-600/60" title="棕色"></button>
-                <button data-color="grey" class="lens-color-btn w-8 h-8 rounded-full border-2 border-transparent bg-gray-400/60" title="灰色"></button>
+            <!-- Contact Lens Catalog (populated dynamically from /api/glasses?item_type=lens) -->
+            <div id="contact-options" class="flex gap-2 overflow-x-auto bg-black/50 backdrop-blur rounded-2xl px-3 py-2 scrollbar-none" style="max-width:90vw">
+                <!-- lens buttons injected by buildLensButtons() -->
             </div>
             <!-- Glasses Styles (populated dynamically from /api/glasses) -->
             <div id="glasses-options" class="hidden flex gap-2 overflow-x-auto bg-black/50 backdrop-blur rounded-2xl px-3 py-2 scrollbar-none text-white" style="max-width:90vw"></div>
