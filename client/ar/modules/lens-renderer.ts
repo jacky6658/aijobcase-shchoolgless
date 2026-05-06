@@ -87,7 +87,9 @@ export class LensRenderer {
       const img = loadLensImage(this.lensImageUrl);
       if (img.complete && img.naturalWidth) {
         const d = lensRadius * 2;
-        ctx.globalAlpha = 0.85;
+        // multiply: dark ring tints the real iris, white/transparent areas show through
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.globalAlpha = 0.92;
         ctx.drawImage(img, irisCenter.x - lensRadius, irisCenter.y - lensRadius, d, d);
         ctx.restore();
         return;
