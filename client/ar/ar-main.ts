@@ -162,6 +162,7 @@ video.addEventListener('playing', resizeCanvas);
 window.addEventListener('resize', resizeCanvas);
 
 // 60fps 獨立渲染迴圈，與偵測分離
+let rafId = 0;
 function renderLoop() {
   if (latestFaceResult?.detected) {
     if (renderer.getMode() === 'glasses') {
@@ -175,9 +176,16 @@ function renderLoop() {
     renderer.clear();
     glasses3DScene.hide();
   }
-  requestAnimationFrame(renderLoop);
+  rafId = requestAnimationFrame(renderLoop);
 }
 renderLoop();
+
+// HMR cleanup — stop old renderLoop so stale contact-mode renderer doesn't keep drawing
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    cancelAnimationFrame(rafId);
+  });
+}
 
 // Face detection callback（只更新資料，不直接 render）
 function onFaceResult(result: FaceResult) {
@@ -760,7 +768,7 @@ async function loadGlassesCatalog() {
   if (!token) return;
 
   try {
-    const res = await fetch('/api/glasses', {
+    const res = await fetch('/api/glasses?item_type=glasses', {
       headers: { Authorization: `Bearer ${token}` },
     });
     console.log('[glasses] API status:', res.status);
