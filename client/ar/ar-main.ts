@@ -285,8 +285,8 @@ modeContact.addEventListener('click', () => {
   renderer.setMode('contact');
   modeContact.classList.add('active');
   modeGlasses.classList.remove('active');
-  contactOptions.classList.remove('hidden');
-  glassesOptions.classList.add('hidden');
+  contactOptions.style.display = 'flex';
+  glassesOptions.style.display = 'none';
   // Reset size slider to current lens scale
   sizeRange.value = String(Math.round((renderer.getLensScale() / 1.8) * 100));
   sizeLabel.textContent = `${sizeRange.value}%`;
@@ -296,8 +296,8 @@ modeGlasses.addEventListener('click', () => {
   renderer.setMode('glasses');
   modeGlasses.classList.add('active');
   modeContact.classList.remove('active');
-  glassesOptions.classList.remove('hidden');
-  contactOptions.classList.add('hidden');
+  glassesOptions.style.display = 'flex';
+  contactOptions.style.display = 'none';
   // Reset size slider and sync glassesScale3D
   const pct = Math.round((renderer.getGlassesScale() / 2.0) * 100);
   sizeRange.value = String(pct);

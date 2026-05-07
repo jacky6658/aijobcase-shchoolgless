@@ -78,8 +78,8 @@ export class LensRenderer {
   private renderContactLens(eye: EyeData) {
     const ctx = this.ctx;
     const { irisCenter, irisRadius } = eye;
-    // Clamp to 5% of canvas height — prevents huge circles if MediaPipe mis-detects glasses as iris
-    const maxIris = this.canvas.height * 0.05;
+    // Clamp to 3.5% of canvas height — prevents huge circles if MediaPipe mis-detects glasses as iris
+    const maxIris = this.canvas.height * 0.035;
     const lensRadius = Math.min(irisRadius, maxIris) * this.lensScale;
 
     ctx.save();
