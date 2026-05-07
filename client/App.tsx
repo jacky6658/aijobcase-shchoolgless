@@ -11,6 +11,7 @@ import LoginView from './components/LoginView';
 import AdminUserManagement from './components/AdminUserManagement';
 import ARPracticeReport from './components/ARPracticeReport';
 import GlassesManagement from './components/GlassesManagement';
+import KnowledgeManagement from './components/KnowledgeManagement';
 import FaceShapeRecommendation from './components/FaceShapeRecommendation';
 import { UserRole, User } from './types';
 import { authService } from './services/authService';
@@ -53,6 +54,7 @@ const App: React.FC = () => {
       );
       case 'ar-report': return <ARPracticeReport />;
       case 'glasses-mgmt': return <GlassesManagement />;
+      case 'knowledge-mgmt': return <KnowledgeManagement />;
       case 'face-recommend': return (
         <FaceShapeRecommendation
           onSelectItem={(item) => {
