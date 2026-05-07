@@ -281,6 +281,13 @@ const modeGlasses = document.getElementById('mode-glasses')!;
 const contactOptions = document.getElementById('contact-options')!;
 const glassesOptions = document.getElementById('glasses-options')!;
 
+// Enforce initial display state (avoids stale DOM on HMR reload)
+contactOptions.style.display = 'flex';
+glassesOptions.style.display = 'none';
+renderer.setMode('contact');
+modeContact.classList.add('active');
+modeGlasses.classList.remove('active');
+
 modeContact.addEventListener('click', () => {
   renderer.setMode('contact');
   modeContact.classList.add('active');
